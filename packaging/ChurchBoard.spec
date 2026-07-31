@@ -8,6 +8,10 @@ project = Path.cwd()
 if not (project / "run.py").is_file():
     project = Path(SPECPATH).resolve().parent
 
+version_scope = {}
+exec((project / "app" / "version.py").read_text(), version_scope)
+app_version = version_scope["__version__"]
+
 a = Analysis(
     [str(project / "run.py")],
     pathex=[str(project)],
@@ -54,6 +58,8 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleDisplayName": "ChurchBoard",
             "CFBundleName": "ChurchBoard",
+            "CFBundleShortVersionString": app_version,
+            "CFBundleVersion": app_version,
             "NSHighResolutionCapable": True,
             "LSBackgroundOnly": False,
         },

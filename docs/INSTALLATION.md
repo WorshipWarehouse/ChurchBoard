@@ -6,13 +6,15 @@ ChurchBoard runs a small local web server and displays its interface in a browse
 
 | Platform | Installer |
 | --- | --- |
-| Windows 10 or 11 | **[Download for Windows (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Windows-x64-Setup.exe)** |
-| Apple silicon Mac — M1, M2, M3, M4, or newer | **[Download for Apple silicon Mac (.pkg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-macOS-arm64.pkg)** |
-| Intel Mac | **[Download for Intel Mac (.pkg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-macOS-x86_64.pkg)** |
-| Ubuntu or Debian Linux | **[Download for Linux (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Linux-amd64.deb)** |
-| Other 64-bit Linux | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Linux-x86_64.tar.gz)** |
+| Windows 10 or 11 | **[Download for Windows (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.1-Windows-x64-Setup.exe)** |
+| Apple silicon Mac — M1, M2, M3, M4, or newer | **[Download for Apple silicon Mac (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.1-macOS-arm64.dmg)** |
+| Intel Mac | **[Download for Intel Mac (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.1-macOS-x86_64.dmg)** |
+| Ubuntu or Debian Linux | **[Download for Linux (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.1-Linux-amd64.deb)** |
+| Other 64-bit Linux | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.1-Linux-x86_64.tar.gz)** |
 
-[See every v0.1.0 download](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.0)
+[See every v0.1.1 download](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.1)
+
+When the repository is private, sign in to the GitHub account that has access before downloading. The links work normally without sign-in after the repository is public.
 
 After installation, Setup is available at:
 
@@ -29,7 +31,7 @@ http://CHURCHBOARD-COMPUTER-IP:8040/display/main
 ## Windows 10 and 11
 
 1. Use the **Download for Windows** link above.
-2. Open `ChurchBoard-0.1.0-Windows-x64-Setup.exe`.
+2. Open `ChurchBoard-0.1.1-Windows-x64-Setup.exe`.
 3. Run the installer. Leave **Start ChurchBoard automatically when I sign in** checked.
 4. When Windows Firewall asks, allow ChurchBoard on **Private networks** if displays on other production computers need to connect.
 5. ChurchBoard starts and opens Setup.
@@ -45,19 +47,15 @@ Choose the package that matches the Mac:
 - `arm64` for Apple silicon (M1, M2, M3, M4, and newer)
 - `x86_64` for Intel Macs
 
-1. Use the matching **Download for Mac** link above.
-2. Open the downloaded `.pkg` and follow the Installer prompts.
-3. ChurchBoard launches Setup and will start automatically at login.
-
-![macOS ChurchBoard Installer introduction](screenshots/macos-installer-introduction.jpg)
-
-Continue to **Installation Type**, confirm that the destination is the Mac's startup disk, and choose **Install**.
-
-![macOS ChurchBoard standard installation screen](screenshots/macos-installer-ready.jpg)
+1. Use the matching **Download for Mac** link above and open the `.dmg`.
+2. Drag **ChurchBoard** onto the **Applications** shortcut in the disk-image window.
+3. Open the Applications folder.
+4. For this unsigned testing build, Control-click **ChurchBoard**, choose **Open**, and then choose **Open** in the confirmation window.
+5. ChurchBoard installs its current-user login service, starts the background server, and opens Setup.
 
 ChurchBoard installs in `/Applications/ChurchBoard.app`. Settings are in `~/.churchboard`, and logs are in `~/Library/Logs/ChurchBoard.log` and `ChurchBoard.error.log`.
 
-Development builds are ad-hoc signed. If macOS blocks a downloaded package before official Developer ID signing and notarization are configured, Control-click the package, choose **Open**, and confirm only if it came from the official ChurchBoard release.
+Development builds are ad-hoc signed. The Control-click step is required until official Developer ID signing and notarization are configured. Only approve a copy downloaded from the official ChurchBoard release.
 
 To uninstall, run **Uninstall ChurchBoard.command** from the disk image. The uninstaller removes the app and login service but preserves `~/.churchboard`.
 
@@ -116,6 +114,8 @@ On 64-bit or 32-bit Raspberry Pi OS, open Terminal as the normal desktop user an
 ```bash
 curl -fsSL https://raw.githubusercontent.com/wtapper89/ChurchBoard/main/installers/raspberry-pi/install.sh | bash
 ```
+
+This raw download requires a public repository. During private testing, clone the repository with an authorized GitHub account and run `installers/raspberry-pi/install.sh` from the clone instead.
 
 For a dedicated display, install Chromium kiosk startup too:
 

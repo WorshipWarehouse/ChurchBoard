@@ -1,0 +1,13 @@
+INSTALL CHURCHBOARD
+===================
+
+1. Drag ChurchBoard.app onto the Applications shortcut in this window.
+2. Open Applications in Finder.
+3. The first time only, Control-click ChurchBoard and choose Open.
+4. Choose Open in the confirmation window.
+
+ChurchBoard will install its login service, start in the background, and open
+Setup in your default browser. It will start automatically at future logins.
+
+The Control-click step is required for this testing build because it has not
+yet been signed and notarized with an Apple Developer ID.

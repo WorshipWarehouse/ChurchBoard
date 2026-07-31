@@ -21,14 +21,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: chmod +x installers/macos/build.sh installers/macos/pkg-scripts/postinstall "installers/macos/Uninstall ChurchBoard.command"
+      - run: chmod +x installers/macos/build.sh "installers/macos/Uninstall ChurchBoard.command"
       - run: PYTHON=python3 installers/macos/build.sh
       - uses: actions/upload-artifact@v6
         with:
           name: ChurchBoard-${{ matrix.runner }}
-          path: |
-            dist/*.pkg
-            dist/*.dmg
+          path: dist/*.dmg
 
   windows:
     runs-on: windows-latest

@@ -28,7 +28,6 @@ PYTHON_BIN="$(find_python)"
 VERSION="$("$PYTHON_BIN" -c 'from app.version import __version__; print(__version__)')"
 ARCH="$(uname -m)"
 APP_PATH="$PROJECT_DIR/dist/ChurchBoard.app"
-PKG_PATH="$PROJECT_DIR/dist/ChurchBoard-${VERSION}-macOS-${ARCH}.pkg"
 DMG_PATH="$PROJECT_DIR/dist/ChurchBoard-${VERSION}-macOS-${ARCH}.dmg"
 
 PACKAGE_STAGE="$(/usr/bin/mktemp -d /private/tmp/churchboard-package.XXXXXX)"
@@ -38,28 +37,21 @@ cleanup_package_stage() {
 trap cleanup_package_stage EXIT
 
 STAGED_APP="$PACKAGE_STAGE/ChurchBoard.app"
-COPYFILE_DISABLE=1 /bin/cp -R "$APP_PATH" "$STAGED_APP"
+/usr/bin/ditto --norsrc --noextattr --noacl "$APP_PATH" "$STAGED_APP"
 /usr/bin/xattr -cr "$STAGED_APP"
 /usr/bin/find "$STAGED_APP" -name '._*' -delete
 /usr/bin/codesign --force --deep --sign - "$STAGED_APP"
 /usr/bin/xattr -cr "$STAGED_APP"
 /usr/bin/find "$STAGED_APP" -name '._*' -delete
-COPYFILE_DISABLE=1 /usr/bin/pkgbuild \
-  --component "$STAGED_APP" \
-  --install-location /Applications \
-  --scripts "$PROJECT_DIR/installers/macos/pkg-scripts" \
-  --identifier org.churchboard.app \
-  --version "$VERSION" \
-  "$PACKAGE_STAGE/ChurchBoard.pkg"
 
 DMG_STAGE="$PACKAGE_STAGE/dmg"
 /bin/mkdir -p "$DMG_STAGE"
-COPYFILE_DISABLE=1 /bin/cp "$PACKAGE_STAGE/ChurchBoard.pkg" "$DMG_STAGE/ChurchBoard-${VERSION}-macOS-${ARCH}.pkg"
+/usr/bin/ditto --norsrc --noextattr --noacl "$STAGED_APP" "$DMG_STAGE/ChurchBoard.app"
+/bin/ln -s /Applications "$DMG_STAGE/Applications"
+/bin/cp "$PROJECT_DIR/installers/macos/INSTALL.txt" "$DMG_STAGE/READ ME - Install ChurchBoard.txt"
 /bin/cp "$PROJECT_DIR/installers/macos/Uninstall ChurchBoard.command" "$DMG_STAGE/"
 /usr/bin/hdiutil create -volname "ChurchBoard ${VERSION}" -srcfolder "$DMG_STAGE" -ov -format UDZO "$PACKAGE_STAGE/ChurchBoard.dmg"
-COPYFILE_DISABLE=1 /bin/cp "$PACKAGE_STAGE/ChurchBoard.pkg" "$PKG_PATH"
 COPYFILE_DISABLE=1 /bin/cp "$PACKAGE_STAGE/ChurchBoard.dmg" "$DMG_PATH"
 
 echo "Built:"
-echo "  $PKG_PATH"
 echo "  $DMG_PATH"
