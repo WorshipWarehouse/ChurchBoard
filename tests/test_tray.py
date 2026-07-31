@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
-from app.tray import DesktopTray
+if sys.platform in {"darwin", "win32"}:
+    from app.tray import DesktopTray
+else:
+    DesktopTray = None
 
 
+@unittest.skipUnless(sys.platform in {"darwin", "win32"}, "desktop tray is only installed on macOS and Windows")
 class TrayTests(unittest.TestCase):
     def test_dashboard_menu_actions_open_the_selected_board(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
