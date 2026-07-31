@@ -17,7 +17,7 @@ While this repository is private, GitHub requires testers to sign in before thes
 - Current item and overall service timing
 - Team-member lists with photos, filtered by team and position
 - Browser-based SPL meter and service-control buttons
-- A WYSIWYG dashboard editor with independent layouts and background colors for each destination
+- A WYSIWYG dashboard editor with independent layouts and color-matched liquid-glass widgets for each destination
 
 ![ChurchBoard audio-board dashboard](docs/screenshots/audio-board.jpg)
 
@@ -28,17 +28,17 @@ Choose your computer and click its download link:
 
 | Your computer | Download |
 | --- | --- |
-| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.7-Windows-x64-Setup.exe)** |
-| **Mac with Apple silicon** — M1, M2, M3, M4, or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.7-macOS-arm64.dmg)** |
-| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.7-macOS-x86_64.dmg)** |
-| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.7-Linux-amd64.deb)** |
-| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.7-Linux-x86_64.tar.gz)** |
+| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.8-Windows-x64-Setup.exe)** |
+| **Mac with Apple silicon** — M1, M2, M3, M4, or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.8-macOS-arm64.dmg)** |
+| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.8-macOS-x86_64.dmg)** |
+| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.8-Linux-amd64.deb)** |
+| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.8-Linux-x86_64.tar.gz)** |
 
 Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it says **Chip**, use Apple silicon. If it says **Processor**, use Intel.
 
 **Raspberry Pi:** jump to the [one-command Raspberry Pi installer](#raspberry-pi).
 
-[View all v0.1.7 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.7)
+[View all v0.1.8 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.8)
 
 ## Install
 
@@ -72,7 +72,7 @@ See [Configuration](docs/CONFIGURATION.md) for Planning Center personal-access-t
 
 ## Dashboard editing
 
-Each dashboard has a stable URL. Add widgets from the palette, drag and resize them on the canvas, then configure the selected widget in the inspector. Text, cards, photos, and status displays scale with their widget.
+Each dashboard has a stable URL. Add widgets from the palette, drag and resize them on the canvas, then configure the selected widget in the inspector. Text, cards, photos, and status displays scale with their widget. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
 
 ![ChurchBoard WYSIWYG dashboard editor](docs/screenshots/dashboard-editor.jpg)
 

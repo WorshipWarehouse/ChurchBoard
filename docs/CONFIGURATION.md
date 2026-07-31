@@ -115,7 +115,7 @@ Browser microphone readings are useful as a production reference but are not a s
 
 ## 10. Open displays
 
-Each dashboard has its own **Background color** picker at the top of the editor. The dashboard background, decorative glow, widget borders, and interface accents follow that color. Operational mic and SPL states remain green, yellow, or red so warnings are still immediately recognizable.
+Each dashboard has its own **Background color** picker at the top of the editor. The dashboard background, translucent liquid-glass widget surfaces, reflections, borders, and interface accents follow that color. Operational mic and SPL states remain green, yellow, or red so warnings are still immediately recognizable.
 
 Use these default URLs locally:
 
@@ -125,6 +125,6 @@ http://127.0.0.1:8040/display/green-room
 http://127.0.0.1:8040/display/audio
 ```
 
-Substitute the ChurchBoard computer's IP address on other production-network devices. Use the fullscreen button in the top-right corner or the Raspberry Pi kiosk installer for a dedicated screen.
+Substitute the ChurchBoard computer's IP address on other production-network devices. Use the fullscreen button in the top-right corner or the Raspberry Pi kiosk installer for a dedicated screen. The hamburger menu provides an **Edit** action beside each board. In the editor, **Open display** returns to that board in the same browser tab.
 
 ![WYSIWYG dashboard editor](screenshots/dashboard-editor.jpg)

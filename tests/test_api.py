@@ -33,9 +33,14 @@ class ApiTests(unittest.TestCase):
         display = self.client.get("/display/main")
         self.assertEqual(display.status_code, 200)
         self.assertEqual(display.headers["cache-control"], "no-store")
-        self.assertEqual(self.client.get("/editor/main").status_code, 200)
-        self.assertIn('id="dashboard-background-color" type="color"', self.client.get("/editor/main").text)
-        self.assertNotIn('id="dashboard-theme"', self.client.get("/editor/main").text)
+        editor = self.client.get("/editor/main")
+        self.assertEqual(editor.status_code, 200)
+        self.assertIn('id="dashboard-background-color" type="color"', editor.text)
+        self.assertNotIn('id="dashboard-theme"', editor.text)
+        self.assertNotIn('target="_blank"', editor.text)
+        display_script = self.client.get("/static/display.js").text
+        self.assertIn('class="board-menu-edit"', display_script)
+        self.assertIn('/editor/${encodeURIComponent(item.slug)}', display_script)
         self.assertTrue(self.client.get("/api/app-info").json()["instance_id"])
 
     def test_desktop_control_lists_boards_and_requires_tray_to_quit(self):
