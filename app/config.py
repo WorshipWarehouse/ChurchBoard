@@ -27,4 +27,3 @@ def load_config() -> AppConfig:
         port=int(os.getenv("CHURCHBOARD_PORT", "8040")),
         data_file=Path(os.getenv("CHURCHBOARD_DATA_FILE", DATA_DIR / "churchboard.json")),
     )
-
