@@ -1,8 +1,26 @@
 # ChurchBoard
 
+## Download ChurchBoard
+
+Choose your computer and click its download link:
+
+| Your computer | Download |
+| --- | --- |
+| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Windows-x64-Setup.exe)** |
+| **Mac with Apple silicon** — M1, M2, M3, M4, or newer | **[Download the Apple silicon Mac installer (.pkg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-macOS-arm64.pkg)** |
+| **Mac with an Intel processor** | **[Download the Intel Mac installer (.pkg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-macOS-x86_64.pkg)** |
+| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Linux-amd64.deb)** |
+| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Linux-x86_64.tar.gz)** |
+
+Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it says **Chip**, use Apple silicon. If it says **Processor**, use Intel.
+
+**Raspberry Pi:** jump to the [one-command Raspberry Pi installer](#raspberry-pi).
+
+[View all v0.1.0 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.0)
+
 ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, and Shure QLX-D/ULX-D microphone telemetry in configurable displays for the stage, green room, audio booth, and production team.
 
-![ChurchBoard main dashboard with photo-forward microphone assignments](docs/screenshots/main-dashboard.jpg)
+![Complete ChurchBoard main dashboard with photo-forward microphone assignments](docs/screenshots/main-dashboard-full.png)
 
 ## What ChurchBoard shows
 
@@ -20,14 +38,9 @@ ChurchBoard is a cross-platform production dashboard for churches. It combines P
 
 ## Install
 
-Download the installer for your computer from the repository's **Releases** page:
-
-- **Windows:** `ChurchBoard-…-Windows-x64-Setup.exe`
-- **macOS:** choose the `arm64` build for Apple silicon or `x86_64` for Intel, then open the `.dmg` and run the `.pkg`
-- **Debian/Ubuntu:** install the matching `.deb`
-- **Other Linux:** unpack the `.tar.gz` and run `install.sh`
-
 Every desktop installer configures ChurchBoard to start automatically. Opening ChurchBoard from the Start menu, Applications folder, or desktop menu opens Setup in the default browser.
+
+### Raspberry Pi
 
 For Raspberry Pi OS:
 

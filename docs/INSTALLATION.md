@@ -2,6 +2,18 @@
 
 ChurchBoard runs a small local web server and displays its interface in a browser. The packaged desktop applications include Python, so end users do not need to install Python.
 
+## Direct installer downloads
+
+| Platform | Installer |
+| --- | --- |
+| Windows 10 or 11 | **[Download for Windows (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Windows-x64-Setup.exe)** |
+| Apple silicon Mac — M1, M2, M3, M4, or newer | **[Download for Apple silicon Mac (.pkg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-macOS-arm64.pkg)** |
+| Intel Mac | **[Download for Intel Mac (.pkg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-macOS-x86_64.pkg)** |
+| Ubuntu or Debian Linux | **[Download for Linux (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Linux-amd64.deb)** |
+| Other 64-bit Linux | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.0-Linux-x86_64.tar.gz)** |
+
+[See every v0.1.0 download](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.0)
+
 After installation, Setup is available at:
 
 ```text
@@ -16,8 +28,8 @@ http://CHURCHBOARD-COMPUTER-IP:8040/display/main
 
 ## Windows 10 and 11
 
-1. Open the ChurchBoard repository's **Releases** page.
-2. Download `ChurchBoard-<version>-Windows-x64-Setup.exe`.
+1. Use the **Download for Windows** link above.
+2. Open `ChurchBoard-0.1.0-Windows-x64-Setup.exe`.
 3. Run the installer. Leave **Start ChurchBoard automatically when I sign in** checked.
 4. When Windows Firewall asks, allow ChurchBoard on **Private networks** if displays on other production computers need to connect.
 5. ChurchBoard starts and opens Setup.
@@ -33,10 +45,9 @@ Choose the package that matches the Mac:
 - `arm64` for Apple silicon (M1, M2, M3, M4, and newer)
 - `x86_64` for Intel Macs
 
-1. Download the `.dmg` from **Releases**.
-2. Open the disk image.
-3. Open the versioned ChurchBoard `.pkg` inside it and follow the Installer prompts.
-4. ChurchBoard launches Setup and will start automatically at login.
+1. Use the matching **Download for Mac** link above.
+2. Open the downloaded `.pkg` and follow the Installer prompts.
+3. ChurchBoard launches Setup and will start automatically at login.
 
 ![macOS ChurchBoard Installer introduction](screenshots/macos-installer-introduction.jpg)
 
@@ -52,7 +63,7 @@ To uninstall, run **Uninstall ChurchBoard.command** from the disk image. The uni
 
 ## Debian, Ubuntu, and Raspberry Pi OS desktop
 
-1. Download the `.deb` matching the computer's architecture.
+1. Use the **Download for Linux (.deb)** link above.
 2. Install it:
 
    ```bash
