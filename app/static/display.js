@@ -21,7 +21,7 @@ function maybeAutoStartSpl(){if(splEngine.running||splEngine.autoAttempted)retur
 async function loadBoard(){
   dashboard=await api(`/api/dashboards/${encodeURIComponent(slug)}`);
   document.title=`${dashboard.name} · ChurchBoard`;
-  document.documentElement.classList.toggle("theme-light",dashboard.theme==="light");
+  dashboard.background_color=applyDashboardAppearance(document.body,dashboard.background_color);
   const root=document.querySelector("#dashboard");
   root.style.setProperty("--columns",dashboard.columns); root.style.setProperty("--row-height",`${dashboard.row_height}px`);
   root.innerHTML="";widgetRenderKeys.clear();

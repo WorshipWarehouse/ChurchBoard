@@ -24,7 +24,20 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(store.load()["dashboards"][2]["widgets"][3]["settings"]["display_mode"], "technical")
             self.assertFalse(store.load()["dashboards"][0]["widgets"][3]["settings"]["use_planning_center_icon"])
             self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["unassigned_media_title"], "Icon")
+            self.assertEqual(store.load()["dashboards"][0]["background_color"], "#0a0d12")
+            self.assertNotIn("theme", store.load()["dashboards"][0])
             self.assertEqual(store.load()["settings"]["planning_center"]["service_types"], [])
+
+    def test_light_theme_migrates_to_dark_customizable_background(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "state.json")
+            data = store.load()
+            data["dashboards"][0].pop("background_color", None)
+            data["dashboards"][0]["theme"] = "light"
+            store.save(data)
+            board = store.load()["dashboards"][0]
+            self.assertEqual(board["background_color"], "#0a0d12")
+            self.assertNotIn("theme", board)
 
     def test_old_mic_widget_migrates_to_combined_assignments(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -51,6 +64,12 @@ class DashboardTests(unittest.TestCase):
     def test_slug_is_normalized_and_validated(self):
         board = Dashboard(id="audio", name="Audio", slug="audio-board", widgets=[])
         self.assertEqual(board.slug, "audio-board")
+
+    def test_background_color_is_normalized_and_validated(self):
+        board = Dashboard(id="audio", name="Audio", slug="audio", background_color="#A12BC3", widgets=[])
+        self.assertEqual(board.background_color, "#a12bc3")
+        with self.assertRaises(ValueError):
+            Dashboard(id="bad", name="Bad", slug="bad", background_color="red", widgets=[])
 
 
 class PlanningCenterTests(unittest.TestCase):

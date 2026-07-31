@@ -34,6 +34,8 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(display.status_code, 200)
         self.assertEqual(display.headers["cache-control"], "no-store")
         self.assertEqual(self.client.get("/editor/main").status_code, 200)
+        self.assertIn('id="dashboard-background-color" type="color"', self.client.get("/editor/main").text)
+        self.assertNotIn('id="dashboard-theme"', self.client.get("/editor/main").text)
         self.assertTrue(self.client.get("/api/app-info").json()["instance_id"])
 
     def test_desktop_control_lists_boards_and_requires_tray_to_quit(self):
@@ -54,11 +56,13 @@ class ApiTests(unittest.TestCase):
     def test_dashboard_round_trip(self):
         board = self.client.get("/api/dashboards/main").json()
         board["name"] = "Sanctuary"
+        board["background_color"] = "#213a5c"
         board["widgets"][3]["settings"]["position_keys"] = ["band::vox 2", "band::vox 1"]
         board["widgets"][3]["settings"]["position_labels"] = {"band::vox 2": {"name": "Vox 2", "team_name": "Band"}}
         response = self.client.put("/api/dashboards/main", json=board)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.client.get("/api/dashboards/main").json()["name"], "Sanctuary")
+        self.assertEqual(self.client.get("/api/dashboards/main").json()["background_color"], "#213a5c")
         saved_settings = self.client.get("/api/dashboards/main").json()["widgets"][3]["settings"]
         self.assertEqual(saved_settings["position_keys"], ["band::vox 2", "band::vox 1"])
         self.assertEqual(saved_settings["position_labels"]["band::vox 2"]["name"], "Vox 2")

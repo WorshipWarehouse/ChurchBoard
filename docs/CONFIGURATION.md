@@ -115,6 +115,8 @@ Browser microphone readings are useful as a production reference but are not a s
 
 ## 10. Open displays
 
+Each dashboard has its own **Background color** picker at the top of the editor. The dashboard background, decorative glow, widget borders, and interface accents follow that color. Operational mic and SPL states remain green, yellow, or red so warnings are still immediately recognizable.
+
 Use these default URLs locally:
 
 ```text

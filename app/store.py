@@ -56,9 +56,9 @@ def default_data() -> dict[str, Any]:
             "manual_plan": None,
         },
         "dashboards": [
-            {"id": "main", "name": "Main", "slug": "main", "theme": "dark", "columns": 12, "row_height": 72, "widgets": main_widgets},
-            {"id": "green-room", "name": "Green Room", "slug": "green-room", "theme": "dark", "columns": 12, "row_height": 72, "widgets": green_room_widgets},
-            {"id": "audio", "name": "Audio Board", "slug": "audio", "theme": "dark", "columns": 12, "row_height": 72, "widgets": audio_widgets},
+            {"id": "main", "name": "Main", "slug": "main", "background_color": "#0a0d12", "columns": 12, "row_height": 72, "widgets": main_widgets},
+            {"id": "green-room", "name": "Green Room", "slug": "green-room", "background_color": "#0a0d12", "columns": 12, "row_height": 72, "widgets": green_room_widgets},
+            {"id": "audio", "name": "Audio Board", "slug": "audio", "background_color": "#0a0d12", "columns": 12, "row_height": 72, "widgets": audio_widgets},
         ],
     }
 
@@ -90,6 +90,12 @@ class ConfigStore:
                 **(raw.get("settings", {}).get("planning_center", {}).get("live_from_propresenter") or {}),
             }
             for dashboard in baseline.get("dashboards", []):
+                dashboard.pop("theme", None)
+                color = str(dashboard.get("background_color") or "").strip().lower()
+                valid_color = len(color) == 7 and color.startswith("#") and all(
+                    character in "0123456789abcdef" for character in color[1:]
+                )
+                dashboard["background_color"] = color if valid_color else "#0a0d12"
                 for widget in dashboard.get("widgets", []):
                     if widget.get("type") == "mics":
                         widget["type"] = "assignments"

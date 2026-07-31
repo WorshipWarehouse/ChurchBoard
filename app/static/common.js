@@ -13,6 +13,13 @@ const safeCssColor = value => {
   const color=String(value||"").trim();
   return /^(#[0-9a-f]{6}(?:[0-9a-f]{2})?|rgba?\([\d.,\s]+\))$/i.test(color)?color:"#65a9ff";
 };
+const dashboardColor = value => /^#[0-9a-f]{6}$/i.test(String(value||""))?String(value).toLowerCase():"#0a0d12";
+const applyDashboardAppearance = (target,value) => {
+  const color=dashboardColor(value);
+  target.style.setProperty("--board-color",color);
+  target.style.setProperty("--board-effect",`color-mix(in srgb,${color} 48%,white)`);
+  return color;
+};
 const contrastText = value => {
   const color=safeCssColor(value);let channels,alpha=1;
   if(color.startsWith("#")){channels=[parseInt(color.slice(1,3),16),parseInt(color.slice(3,5),16),parseInt(color.slice(5,7),16)];if(color.length===9)alpha=parseInt(color.slice(7,9),16)/255}

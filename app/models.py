@@ -21,7 +21,7 @@ class Dashboard(BaseModel):
     id: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=100)
     slug: str = Field(min_length=1, max_length=80)
-    theme: Literal["dark", "light"] = "dark"
+    background_color: str = "#0a0d12"
     columns: int = Field(default=12, ge=4, le=24)
     row_height: int = Field(default=72, ge=40, le=160)
     widgets: list[Widget] = Field(default_factory=list, max_length=50)
@@ -32,6 +32,14 @@ class Dashboard(BaseModel):
         value = value.strip().lower()
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value):
             raise ValueError("Use lowercase letters, numbers, and hyphens")
+        return value
+
+    @field_validator("background_color")
+    @classmethod
+    def validate_background_color(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not re.fullmatch(r"#[0-9a-f]{6}", value):
+            raise ValueError("Choose a six-digit hexadecimal background color")
         return value
 
 
