@@ -23,7 +23,6 @@ PYTHON_BIN="$(find_python)"
 "$PYTHON_BIN" -m venv .build-venv
 .build-venv/bin/python -m pip install --upgrade pip
 .build-venv/bin/pip install -r requirements.txt -r build-requirements.txt
-.build-venv/bin/python packaging/generate_brand_assets.py
 .build-venv/bin/pyinstaller packaging/ChurchBoard.spec --noconfirm --clean
 
 VERSION="$("$PYTHON_BIN" -c 'from app.version import __version__; print(__version__)')"
