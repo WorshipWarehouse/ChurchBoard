@@ -1,5 +1,7 @@
 # ChurchBoard
 
+ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, and Shure QLX-D/ULX-D microphone telemetry in configurable displays for the stage, green room, audio booth, and production team.
+
 ## Download ChurchBoard
 
 Choose your computer and click its download link:
@@ -18,9 +20,7 @@ Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it say
 
 [View all v0.1.0 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.0)
 
-ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, and Shure QLX-D/ULX-D microphone telemetry in configurable displays for the stage, green room, audio booth, and production team.
-
-![Complete ChurchBoard main dashboard with photo-forward microphone assignments](docs/screenshots/main-dashboard-full.png)
+![Complete ChurchBoard main dashboard with photo-forward microphone assignments](docs/screenshots/main-dashboard-complete.jpg)
 
 ## What ChurchBoard shows
 
