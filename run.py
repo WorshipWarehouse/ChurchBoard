@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging.handlers
 import sys
 import threading
 import time
@@ -13,6 +14,33 @@ import uvicorn
 
 from app.main import app, run
 from app.macos import install_and_start_launch_agent
+
+
+def desktop_log_config(data_file) -> dict:
+    log_path = data_file.parent / "ChurchBoard.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"},
+        },
+        "handlers": {
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "filename": str(log_path),
+                "maxBytes": 2_000_000,
+                "backupCount": 2,
+                "encoding": "utf-8",
+                "formatter": "default",
+            },
+        },
+        "loggers": {
+            "uvicorn": {"handlers": ["file"], "level": "INFO", "propagate": False},
+            "uvicorn.error": {"handlers": ["file"], "level": "INFO", "propagate": False},
+            "uvicorn.access": {"handlers": ["file"], "level": "INFO", "propagate": False},
+        },
+    }
 
 
 def open_churchboard(page: str) -> None:
@@ -49,7 +77,16 @@ def run_with_desktop_tray() -> None:
     from app.tray import DesktopTray
 
     config = load_config()
-    server = uvicorn.Server(uvicorn.Config(app, host=config.host, port=config.port, reload=False))
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host=config.host,
+            port=config.port,
+            reload=False,
+            access_log=False,
+            log_config=desktop_log_config(config.data_file),
+        )
+    )
     tray = DesktopTray(config.port, config.data_file, lambda: setattr(server, "should_exit", True))
     app.state.desktop_quit = tray.quit
     server_thread = threading.Thread(target=server.run, name="ChurchBoard server", daemon=True)
@@ -75,12 +112,15 @@ if __name__ == "__main__":
     )
     parser.add_argument("--no-tray", action="store_true", help="run without a menu-bar or system-tray icon")
     arguments = parser.parse_args()
+    # An installed Mac app always refreshes its LaunchAgent first. This stops
+    # an older ChurchBoard process that may still own port 8040 after an
+    # in-place drag update, then starts the newly installed version.
+    if not arguments.background and install_and_start_launch_agent():
+        open_churchboard_when_ready(arguments.page)
+        raise SystemExit(0)
     if churchboard_is_running():
         if not arguments.background:
             open_churchboard(arguments.page)
-        raise SystemExit(0)
-    if not arguments.background and install_and_start_launch_agent():
-        open_churchboard_when_ready(arguments.page)
         raise SystemExit(0)
     if not arguments.background:
         threading.Timer(1.25, open_churchboard, args=(arguments.page,)).start()

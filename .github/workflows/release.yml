@@ -23,6 +23,13 @@ jobs:
           cache: pip
       - run: chmod +x installers/macos/build.sh "installers/macos/Uninstall ChurchBoard.command"
       - run: PYTHON=python3 installers/macos/build.sh
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       - uses: actions/upload-artifact@v6
         with:
           name: ChurchBoard-${{ matrix.runner }}

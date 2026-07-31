@@ -50,3 +50,12 @@ Filename: "{app}\{#AppExeName}"; Parameters: "--page desktop"; Description: "Sta
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /IM ChurchBoard.exe /F"; Flags: runhidden; RunOnceId: "StopChurchBoard"
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssInstall then
+    Exec(ExpandConstant('{cmd}'), '/C taskkill /IM ChurchBoard.exe /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;

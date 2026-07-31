@@ -71,7 +71,7 @@ if sys.platform == "darwin":
             "CFBundleShortVersionString": app_version,
             "CFBundleVersion": app_version,
             "NSHighResolutionCapable": True,
-            "LSUIElement": True,
+            "LSUIElement": False,
         },
     )
 else:

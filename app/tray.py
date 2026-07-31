@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import sys
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
@@ -18,6 +19,7 @@ class DesktopTray:
         self.store = ConfigStore(data_file)
         self.on_quit = on_quit
         self.icon = None
+        self._application_delegate = None
 
     def open_path(self, path: str) -> None:
         threading.Thread(
@@ -54,6 +56,8 @@ class DesktopTray:
     def run(self) -> None:
         import pystray
 
+        if sys.platform == "darwin":
+            self._configure_macos_dock()
         artwork = Image.open(ROOT_DIR / "app" / "static" / "churchboard-icon.png").convert("RGBA")
         menu = pystray.Menu(
             pystray.MenuItem("Open ChurchBoard", lambda *_: self.open_path("desktop"), default=True),
@@ -67,3 +71,19 @@ class DesktopTray:
         )
         self.icon = pystray.Icon("ChurchBoard", artwork, "ChurchBoard", menu)
         self.icon.run()
+
+    def _configure_macos_dock(self) -> None:
+        import AppKit
+        from Foundation import NSObject
+
+        tray = self
+
+        class ChurchBoardApplicationDelegate(NSObject):
+            def applicationShouldHandleReopen_hasVisibleWindows_(self, _application, _has_visible_windows):
+                tray.open_path("desktop")
+                return True
+
+        application = AppKit.NSApplication.sharedApplication()
+        application.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+        self._application_delegate = ChurchBoardApplicationDelegate.alloc().init()
+        application.setDelegate_(self._application_delegate)
