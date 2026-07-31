@@ -1,7 +1,8 @@
 [Desktop Entry]
 Name=ChurchBoard
-Comment=Open ChurchBoard Setup
-Exec=xdg-open http://127.0.0.1:8040/admin
+Comment=Open ChurchBoard
+Exec=xdg-open http://127.0.0.1:8040/desktop
+Icon=churchboard
 Terminal=false
 Type=Application
 Categories=AudioVideo;Utility;

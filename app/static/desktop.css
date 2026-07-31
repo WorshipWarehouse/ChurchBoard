@@ -1,0 +1,20 @@
+.desktop-page{min-height:100vh;background:radial-gradient(circle at 50% -15%,#2e2116 0,#121318 38%,#090c11 75%)}
+.desktop-shell{width:min(940px,calc(100% - 28px));margin:0 auto;padding:44px 0 60px}
+.desktop-hero{display:grid;grid-template-columns:190px 1fr;align-items:center;gap:34px;margin-bottom:34px}
+.desktop-logo{display:block;width:190px;height:190px;object-fit:contain;filter:drop-shadow(0 18px 28px #0009)}
+.desktop-hero h1{margin:4px 0 10px;font-size:clamp(2.7rem,8vw,5.3rem);line-height:.9;letter-spacing:-.065em}
+.desktop-intro{max-width:660px;margin:0;color:#bac2d0;font-size:1.05rem;line-height:1.55}
+.eyebrow{margin:0;color:#d9a15f;font-size:.72rem;font-weight:900;letter-spacing:.16em}
+.desktop-section{margin-top:15px;padding:24px;background:linear-gradient(145deg,#171c25,#10141b);border:1px solid #2c3442;border-radius:18px;box-shadow:0 14px 38px #0005}
+.desktop-heading{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.desktop-heading h2{margin:4px 0 0;font-size:1.55rem}
+.desktop-primary{background:#d59a57;color:#211207}
+.desktop-boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:18px}
+.desktop-board{display:flex;align-items:center;gap:13px;min-width:0;padding:15px;color:var(--text);text-decoration:none;background:#0b0f15;border:1px solid #30394a;border-radius:13px;transition:.15s ease}
+.desktop-board:hover{transform:translateY(-2px);border-color:#d59a57;box-shadow:0 9px 22px #0006}
+.desktop-board img{width:46px;height:46px;object-fit:contain;flex:none}
+.desktop-board span{min-width:0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.desktop-board small{display:block;margin-top:3px;color:var(--muted);font-weight:500}
+.desktop-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:15px}
+.desktop-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:22px;padding:7px 4px;color:var(--muted);font-size:.88rem}
+@media(max-width:620px){.desktop-shell{padding-top:24px}.desktop-hero{grid-template-columns:100px 1fr;gap:17px}.desktop-logo{width:100px;height:100px}.desktop-intro{grid-column:1/-1}.desktop-heading,.desktop-footer{align-items:flex-start;flex-direction:column}.desktop-heading .button{width:100%}}

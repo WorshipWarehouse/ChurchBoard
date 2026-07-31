@@ -24,8 +24,8 @@ def launch_agent_payload(executable: Path, home: Path) -> dict[str, object]:
         "ProgramArguments": [str(executable), "--background"],
         "EnvironmentVariables": {"CHURCHBOARD_DATA_DIR": str(data_dir)},
         "RunAtLoad": True,
-        "KeepAlive": True,
-        "ProcessType": "Background",
+        "KeepAlive": False,
+        "ProcessType": "Interactive",
         "StandardOutPath": str(log_dir / "ChurchBoard.log"),
         "StandardErrorPath": str(log_dir / "ChurchBoard.error.log"),
     }

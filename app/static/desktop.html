@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ChurchBoard</title>
+  <link rel="icon" type="image/png" href="/static/churchboard-icon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/desktop.css">
+</head>
+<body class="desktop-page">
+  <main class="desktop-shell">
+    <header class="desktop-hero">
+      <img src="/static/churchboard-logo.png" alt="ChurchBoard wooden church announcement board" class="desktop-logo">
+      <div>
+        <p class="eyebrow">CHURCH PRODUCTION DASHBOARD</p>
+        <h1>ChurchBoard</h1>
+        <p class="desktop-intro">Open Setup or launch a board. ChurchBoard will keep running from the menu-bar or system-tray icon when this browser window closes.</p>
+      </div>
+    </header>
+
+    <section class="desktop-section">
+      <div class="desktop-heading">
+        <div><p class="eyebrow">CONFIGURE</p><h2>Setup</h2></div>
+        <a class="button desktop-primary" href="/admin">Open ChurchBoard Setup</a>
+      </div>
+      <p class="muted">Connect Planning Center, ProPresenter, and Shure microphones, then create and edit dashboard layouts.</p>
+    </section>
+
+    <section class="desktop-section">
+      <div class="desktop-heading"><div><p class="eyebrow">DISPLAY</p><h2>Your boards</h2></div></div>
+      <div id="desktop-boards" class="desktop-boards"><p class="muted">Loading boards…</p></div>
+    </section>
+
+    <section class="desktop-section" id="updates">
+      <div class="desktop-heading">
+        <div><p class="eyebrow">SOFTWARE</p><h2>Updates</h2></div>
+        <button id="check-update" class="button secondary" type="button">Check for updates</button>
+      </div>
+      <p id="update-status" class="muted">ChurchBoard <span id="desktop-version">…</span> is installed.</p>
+      <div id="update-actions" class="desktop-actions" hidden>
+        <button id="install-update" class="button" type="button">Download and install update</button>
+        <a id="release-link" class="button secondary" href="https://github.com/wtapper89/ChurchBoard/releases/latest" target="_blank" rel="noreferrer">Open GitHub releases</a>
+      </div>
+    </section>
+
+    <footer class="desktop-footer">
+      <span>Closing this browser window does not stop ChurchBoard.</span>
+      <button id="quit-app" class="button danger" type="button">Quit ChurchBoard</button>
+    </footer>
+  </main>
+  <script src="/static/desktop.js"></script>
+</body>
+</html>

@@ -23,6 +23,8 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName=ChurchBoard
+UninstallDisplayIcon={app}\{#AppExeName}
+SetupIconFile=..\..\packaging\assets\ChurchBoard.ico
 CloseApplications=yes
 RestartApplications=no
 
@@ -34,17 +36,17 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "..\..\dist\ChurchBoard.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Open ChurchBoard Setup"; Filename: "http://127.0.0.1:8040/admin"
-Name: "{group}\Open Main Dashboard"; Filename: "http://127.0.0.1:8040/display/main"
+Name: "{group}\ChurchBoard"; Filename: "{app}\{#AppExeName}"; Parameters: "--page desktop"; IconFilename: "{app}\{#AppExeName}"
+Name: "{group}\Open ChurchBoard Setup"; Filename: "{app}\{#AppExeName}"; Parameters: "--page admin"; IconFilename: "{app}\{#AppExeName}"
+Name: "{group}\Open Main Dashboard"; Filename: "{app}\{#AppExeName}"; Parameters: "--page display/main"; IconFilename: "{app}\{#AppExeName}"
 Name: "{group}\Start ChurchBoard"; Filename: "{app}\{#AppExeName}"; Parameters: "--background"
-Name: "{autodesktop}\ChurchBoard"; Filename: "http://127.0.0.1:8040/admin"; Tasks: desktopicon
+Name: "{autodesktop}\ChurchBoard"; Filename: "{app}\{#AppExeName}"; Parameters: "--page desktop"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ChurchBoard"; ValueData: """{app}\{#AppExeName}"" --background"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Parameters: "--background"; Description: "Start ChurchBoard"; Flags: nowait postinstall skipifsilent
-Filename: "http://127.0.0.1:8040/admin"; Description: "Open ChurchBoard Setup"; Flags: shellexec nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Parameters: "--page desktop"; Description: "Start and open ChurchBoard"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /IM ChurchBoard.exe /F"; Flags: runhidden; RunOnceId: "StopChurchBoard"

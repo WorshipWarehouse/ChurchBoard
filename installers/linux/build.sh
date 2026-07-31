@@ -23,6 +23,7 @@ PYTHON_BIN="$(find_python)"
 "$PYTHON_BIN" -m venv .build-venv
 .build-venv/bin/python -m pip install --upgrade pip
 .build-venv/bin/pip install -r requirements.txt -r build-requirements.txt
+.build-venv/bin/python packaging/generate_brand_assets.py
 .build-venv/bin/pyinstaller packaging/ChurchBoard.spec --noconfirm --clean
 
 VERSION="$("$PYTHON_BIN" -c 'from app.version import __version__; print(__version__)')"
@@ -39,15 +40,17 @@ ARCHIVE_STAGE="$PROJECT_DIR/build/churchboard-linux"
 /bin/cp "$PROJECT_DIR/dist/ChurchBoard" "$ARCHIVE_STAGE/"
 /bin/cp "$PROJECT_DIR/installers/linux/install.sh" "$ARCHIVE_STAGE/"
 /bin/cp "$PROJECT_DIR/installers/linux/uninstall.sh" "$ARCHIVE_STAGE/"
+/bin/cp "$PROJECT_DIR/app/static/churchboard-icon.png" "$ARCHIVE_STAGE/"
 /bin/chmod +x "$ARCHIVE_STAGE/ChurchBoard" "$ARCHIVE_STAGE/install.sh" "$ARCHIVE_STAGE/uninstall.sh"
 /usr/bin/tar -C "$ARCHIVE_STAGE" -czf "$PROJECT_DIR/dist/ChurchBoard-${VERSION}-Linux-${ARCH}.tar.gz" .
 
 DEB_ROOT="$PROJECT_DIR/build/churchboard-deb"
 /bin/rm -rf "$DEB_ROOT"
-/bin/mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT/opt/churchboard" "$DEB_ROOT/lib/systemd/system" "$DEB_ROOT/usr/share/applications"
+/bin/mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT/opt/churchboard" "$DEB_ROOT/lib/systemd/system" "$DEB_ROOT/usr/share/applications" "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps"
 /bin/cp "$PROJECT_DIR/dist/ChurchBoard" "$DEB_ROOT/opt/churchboard/ChurchBoard"
 /bin/cp "$PROJECT_DIR/installers/linux/churchboard.service" "$DEB_ROOT/lib/systemd/system/churchboard.service"
 /bin/cp "$PROJECT_DIR/installers/linux/churchboard.desktop" "$DEB_ROOT/usr/share/applications/churchboard.desktop"
+/bin/cp "$PROJECT_DIR/app/static/churchboard-icon.png" "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps/churchboard.png"
 /bin/cp "$PROJECT_DIR/installers/linux/debian/postinst" "$DEB_ROOT/DEBIAN/postinst"
 /bin/cp "$PROJECT_DIR/installers/linux/debian/prerm" "$DEB_ROOT/DEBIAN/prerm"
 /bin/chmod 0755 "$DEB_ROOT/opt/churchboard/ChurchBoard" "$DEB_ROOT/DEBIAN/postinst" "$DEB_ROOT/DEBIAN/prerm"

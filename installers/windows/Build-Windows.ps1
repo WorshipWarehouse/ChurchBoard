@@ -11,6 +11,7 @@ if ($LASTEXITCODE -ne 0) {
 & $Python -m venv .build-venv
 & .\.build-venv\Scripts\python.exe -m pip install --upgrade pip
 & .\.build-venv\Scripts\pip.exe install -r requirements.txt -r build-requirements.txt
+& .\.build-venv\Scripts\python.exe packaging\generate_brand_assets.py
 & .\.build-venv\Scripts\pyinstaller.exe packaging\ChurchBoard.spec --noconfirm --clean
 
 $env:CHURCHBOARD_VERSION = & $Python -c "from app.version import __version__; print(__version__)"

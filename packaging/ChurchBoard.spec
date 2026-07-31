@@ -11,6 +11,13 @@ if not (project / "run.py").is_file():
 version_scope = {}
 exec((project / "app" / "version.py").read_text(), version_scope)
 app_version = version_scope["__version__"]
+mac_icon = str(project / "packaging" / "assets" / "ChurchBoard.icns")
+windows_icon = str(project / "packaging" / "assets" / "ChurchBoard.ico")
+tray_hidden_imports = []
+if sys.platform == "darwin":
+    tray_hidden_imports.extend(["app.tray", "PIL.Image", "pystray", "pystray._darwin"])
+elif sys.platform == "win32":
+    tray_hidden_imports.extend(["app.tray", "PIL.Image", "pystray", "pystray._win32"])
 
 a = Analysis(
     [str(project / "run.py")],
@@ -23,6 +30,7 @@ a = Analysis(
         "uvicorn.protocols.http.auto",
         "uvicorn.protocols.websockets.auto",
         "uvicorn.lifespan.on",
+        *tray_hidden_imports,
     ],
     excludes=["pytest"],
     noarchive=False,
@@ -42,6 +50,7 @@ if sys.platform == "darwin":
         strip=False,
         upx=True,
         console=False,
+        icon=mac_icon,
     )
     collected = COLLECT(
         exe,
@@ -55,13 +64,14 @@ if sys.platform == "darwin":
         collected,
         name="ChurchBoard.app",
         bundle_identifier="org.churchboard.app",
+        icon=mac_icon,
         info_plist={
             "CFBundleDisplayName": "ChurchBoard",
             "CFBundleName": "ChurchBoard",
             "CFBundleShortVersionString": app_version,
             "CFBundleVersion": app_version,
             "NSHighResolutionCapable": True,
-            "LSBackgroundOnly": False,
+            "LSUIElement": True,
         },
     )
 else:
@@ -77,4 +87,5 @@ else:
         strip=False,
         upx=True,
         console=sys.platform != "win32",
+        icon=windows_icon if sys.platform == "win32" else None,
     )

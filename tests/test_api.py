@@ -22,6 +22,10 @@ class ApiTests(unittest.TestCase):
         os.environ.pop("CHURCHBOARD_DATA_FILE", None)
 
     def test_setup_display_and_editor_pages_load(self):
+        desktop = self.client.get("/desktop")
+        self.assertEqual(desktop.status_code, 200)
+        self.assertIn("churchboard-logo.png", desktop.text)
+        self.assertEqual(self.client.get("/", follow_redirects=False).headers["location"], "/desktop")
         admin = self.client.get("/admin")
         self.assertEqual(admin.status_code, 200)
         self.assertIn('select name="timezone"', admin.text)
@@ -31,6 +35,13 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(display.headers["cache-control"], "no-store")
         self.assertEqual(self.client.get("/editor/main").status_code, 200)
         self.assertTrue(self.client.get("/api/app-info").json()["instance_id"])
+
+    def test_desktop_control_lists_boards_and_requires_tray_to_quit(self):
+        response = self.client.get("/api/dashboards")
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.json()["items"]), 1)
+        stopped = self.client.post("/api/desktop/quit")
+        self.assertEqual(stopped.status_code, 409)
 
     def test_timezone_catalog_contains_standard_choices(self):
         response = self.client.get("/api/timezones")

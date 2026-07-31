@@ -23,6 +23,7 @@ PYTHON_BIN="$(find_python)"
 "$PYTHON_BIN" -m venv .build-venv
 .build-venv/bin/python -m pip install --upgrade pip
 .build-venv/bin/pip install -r requirements.txt -r build-requirements.txt
+.build-venv/bin/python packaging/generate_brand_assets.py
 .build-venv/bin/pyinstaller packaging/ChurchBoard.spec --noconfirm --clean
 
 VERSION="$("$PYTHON_BIN" -c 'from app.version import __version__; print(__version__)')"
@@ -44,13 +45,12 @@ STAGED_APP="$PACKAGE_STAGE/ChurchBoard.app"
 /usr/bin/xattr -cr "$STAGED_APP"
 /usr/bin/find "$STAGED_APP" -name '._*' -delete
 
-DMG_STAGE="$PACKAGE_STAGE/dmg"
-/bin/mkdir -p "$DMG_STAGE"
-/usr/bin/ditto --norsrc --noextattr --noacl "$STAGED_APP" "$DMG_STAGE/ChurchBoard.app"
-/bin/ln -s /Applications "$DMG_STAGE/Applications"
-/bin/cp "$PROJECT_DIR/installers/macos/INSTALL.txt" "$DMG_STAGE/READ ME - Install ChurchBoard.txt"
-/bin/cp "$PROJECT_DIR/installers/macos/Uninstall ChurchBoard.command" "$DMG_STAGE/"
-/usr/bin/hdiutil create -volname "ChurchBoard ${VERSION}" -srcfolder "$DMG_STAGE" -ov -format UDZO "$PACKAGE_STAGE/ChurchBoard.dmg"
+.build-venv/bin/dmgbuild \
+  -s "$PROJECT_DIR/packaging/dmg-settings.py" \
+  -D "app=$STAGED_APP" \
+  -D "background=$PROJECT_DIR/packaging/assets/dmg-background.png" \
+  -D "icon=$PROJECT_DIR/packaging/assets/ChurchBoard.icns" \
+  "ChurchBoard ${VERSION}" "$PACKAGE_STAGE/ChurchBoard.dmg"
 COPYFILE_DISABLE=1 /bin/cp "$PACKAGE_STAGE/ChurchBoard.dmg" "$DMG_PATH"
 
 echo "Built:"

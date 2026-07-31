@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from copy import deepcopy
+import ipaddress
+import threading
 from uuid import uuid4
 from zoneinfo import available_timezones
 
@@ -17,6 +19,7 @@ from app.services.runtime import RuntimeService
 from app.services.planning_center import PlanningCenterClient
 from app.services.propresenter import ProPresenterClient
 from app.store import ConfigStore
+from app.update import download_update, update_status
 from app.version import __version__
 
 
@@ -47,7 +50,7 @@ app.mount("/static", StaticFiles(directory=ROOT_DIR / "app" / "static"), name="s
 @app.middleware("http")
 async def prevent_stale_dashboard_assets(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith("/static/") or request.url.path in {"/admin"} or request.url.path.startswith(("/display/", "/editor/")):
+    if request.url.path.startswith("/static/") or request.url.path in {"/admin", "/desktop"} or request.url.path.startswith(("/display/", "/editor/")):
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -65,7 +68,12 @@ def dashboard_or_404(store: ConfigStore, identifier: str) -> dict:
 
 @app.get("/")
 async def root() -> RedirectResponse:
-    return RedirectResponse("/admin")
+    return RedirectResponse("/desktop")
+
+
+@app.get("/desktop")
+async def desktop_page() -> FileResponse:
+    return FileResponse(ROOT_DIR / "app" / "static" / "desktop.html")
 
 
 @app.get("/admin")
@@ -159,6 +167,42 @@ async def get_runtime(request: Request) -> dict:
 @app.get("/api/app-info")
 async def get_app_info(request: Request) -> dict:
     return {"instance_id": request.app.state.instance_id, "version": request.app.version}
+
+
+def require_local_desktop(request: Request) -> None:
+    host = request.client.host if request.client else ""
+    if host == "testclient":
+        return
+    try:
+        if ipaddress.ip_address(host).is_loopback:
+            return
+    except ValueError:
+        pass
+    raise HTTPException(403, "Desktop controls are only available on the computer running ChurchBoard")
+
+
+@app.get("/api/desktop/update")
+async def check_desktop_update(request: Request) -> dict:
+    require_local_desktop(request)
+    result = await update_status()
+    result.pop("_asset", None)
+    return result
+
+
+@app.post("/api/desktop/update")
+async def install_desktop_update(request: Request) -> dict:
+    require_local_desktop(request)
+    return await download_update()
+
+
+@app.post("/api/desktop/quit")
+async def quit_desktop(request: Request) -> dict:
+    require_local_desktop(request)
+    callback = getattr(request.app.state, "desktop_quit", None)
+    if not callback:
+        raise HTTPException(409, "This ChurchBoard process is not running with a desktop icon")
+    threading.Timer(0.3, callback).start()
+    return {"stopping": True}
 
 
 @app.get("/api/timezones")

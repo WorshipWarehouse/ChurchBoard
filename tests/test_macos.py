@@ -24,7 +24,8 @@ class MacOSInstallerTests(unittest.TestCase):
             self.assertEqual(payload["EnvironmentVariables"], {"CHURCHBOARD_DATA_DIR": str(home / ".churchboard")})
             self.assertEqual(payload["StandardErrorPath"], str(home / "Library" / "Logs" / "ChurchBoard.error.log"))
             self.assertTrue(payload["RunAtLoad"])
-            self.assertTrue(payload["KeepAlive"])
+            self.assertFalse(payload["KeepAlive"])
+            self.assertEqual(payload["ProcessType"], "Interactive")
 
     def test_first_launch_writes_and_bootstraps_launch_agent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

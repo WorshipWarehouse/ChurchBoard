@@ -11,8 +11,10 @@ fi
 INSTALL_DIR="$HOME/.local/share/churchboard"
 SERVICE_DIR="$HOME/.config/systemd/user"
 APPLICATION_DIR="$HOME/.local/share/applications"
-/bin/mkdir -p "$INSTALL_DIR" "$SERVICE_DIR" "$APPLICATION_DIR"
+ICON_DIR="$HOME/.local/share/icons/hicolor/512x512/apps"
+/bin/mkdir -p "$INSTALL_DIR" "$SERVICE_DIR" "$APPLICATION_DIR" "$ICON_DIR"
 /usr/bin/install -m 0755 "$SOURCE_BINARY" "$INSTALL_DIR/ChurchBoard"
+/usr/bin/install -m 0644 "$SCRIPT_DIR/churchboard-icon.png" "$ICON_DIR/churchboard.png"
 
 /bin/cat > "$SERVICE_DIR/churchboard.service" <<EOF
 [Unit]
@@ -35,8 +37,9 @@ EOF
 /bin/cat > "$APPLICATION_DIR/churchboard.desktop" <<EOF
 [Desktop Entry]
 Name=ChurchBoard
-Comment=Open ChurchBoard Setup
-Exec=xdg-open http://127.0.0.1:8040/admin
+Comment=Open ChurchBoard
+Exec=xdg-open http://127.0.0.1:8040/desktop
+Icon=churchboard
 Terminal=false
 Type=Application
 Categories=AudioVideo;Utility;
@@ -49,4 +52,4 @@ if command -v loginctl >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
 fi
 
 echo "ChurchBoard is installed and will start automatically."
-echo "Open http://127.0.0.1:8040/admin"
+echo "Open http://127.0.0.1:8040/desktop"
