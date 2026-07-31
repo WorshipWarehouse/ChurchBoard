@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import json
 import logging.handlers
+import os
+import subprocess
 import sys
 import threading
 import time
@@ -14,6 +18,7 @@ import uvicorn
 
 from app.main import app, run
 from app.macos import install_and_start_launch_agent
+from app.version import __version__
 
 
 def desktop_log_config(data_file) -> dict:
@@ -49,13 +54,99 @@ def open_churchboard(page: str) -> None:
     webbrowser.open(f"http://127.0.0.1:{config.port}{path}")
 
 
-def churchboard_is_running() -> bool:
+def running_churchboard_info() -> dict | None:
     config = load_config()
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{config.port}/api/app-info", timeout=0.75) as response:
-            return response.status == 200
-    except (OSError, urllib.error.URLError):
-        return False
+            if response.status != 200:
+                return None
+            result = json.loads(response.read().decode("utf-8"))
+            return result if isinstance(result, dict) else None
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+
+
+def compatible_desktop_is_running() -> bool:
+    info = running_churchboard_info()
+    return bool(
+        info
+        and str(info.get("version") or "") == __version__
+        and info.get("desktop_tray") is True
+        and (sys.platform != "darwin" or info.get("macos_launchservices") is True)
+    )
+
+
+def _run_hidden(command: list[str]) -> subprocess.CompletedProcess[str]:
+    options: dict = {
+        "capture_output": True,
+        "text": True,
+        "check": False,
+    }
+    if sys.platform == "win32":
+        options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.run(command, **options)
+
+
+def _listener_pids(port: int) -> set[int]:
+    try:
+        if sys.platform == "win32":
+            result = _run_hidden(["netstat", "-ano", "-p", "tcp"])
+            pids: set[int] = set()
+            for line in result.stdout.splitlines():
+                fields = line.split()
+                if len(fields) < 4 or not fields[0].upper().startswith("TCP"):
+                    continue
+                local_address = fields[1].rsplit(":", 1)
+                if len(local_address) == 2 and local_address[1] == str(port) and fields[-1].isdigit():
+                    pids.add(int(fields[-1]))
+            return pids
+        if sys.platform == "darwin":
+            result = _run_hidden([
+                "/usr/sbin/lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t",
+            ])
+            return {int(value) for value in result.stdout.split() if value.isdigit()}
+    except OSError:
+        pass
+    return set()
+
+
+def _is_churchboard_process(pid: int) -> bool:
+    try:
+        if sys.platform == "win32":
+            result = _run_hidden([
+                "tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH",
+            ])
+            row = next(csv.reader(result.stdout.splitlines()), [])
+            return bool(row and row[0].strip().lower() == "churchboard.exe")
+        if sys.platform == "darwin":
+            result = _run_hidden(["/bin/ps", "-p", str(pid), "-o", "command="])
+            command = result.stdout.strip().lower()
+            return "churchboard.app/contents/macos/churchboard" in command
+    except OSError:
+        pass
+    return False
+
+
+def stop_incompatible_churchboard() -> bool:
+    """Stop an older packaged ChurchBoard that still owns the configured port."""
+    config = load_config()
+    stopped = False
+    for pid in _listener_pids(config.port):
+        if pid == os.getpid() or not _is_churchboard_process(pid):
+            continue
+        try:
+            if sys.platform == "win32":
+                _run_hidden(["taskkill", "/PID", str(pid), "/T", "/F"])
+            else:
+                _run_hidden(["/bin/kill", "-TERM", str(pid)])
+            stopped = True
+        except OSError:
+            continue
+    if stopped:
+        deadline = time.monotonic() + 5
+        while running_churchboard_info() and time.monotonic() < deadline:
+            time.sleep(0.1)
+    return stopped
 
 
 def open_churchboard_when_ready(page: str, timeout: float = 20.0) -> None:
@@ -89,6 +180,7 @@ def run_with_desktop_tray() -> None:
     )
     tray = DesktopTray(config.port, config.data_file, lambda: setattr(server, "should_exit", True))
     app.state.desktop_quit = tray.quit
+    app.state.desktop_tray = True
     server_thread = threading.Thread(target=server.run, name="ChurchBoard server", daemon=True)
     server_thread.start()
     try:
@@ -111,16 +203,26 @@ if __name__ == "__main__":
         help="page to open when starting interactively (default: desktop)",
     )
     parser.add_argument("--no-tray", action="store_true", help="run without a menu-bar or system-tray icon")
+    parser.add_argument(
+        "--launchservices",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     arguments = parser.parse_args()
-    # An installed Mac app always refreshes its LaunchAgent first. This stops
-    # an older ChurchBoard process that may still own port 8040 after an
-    # in-place drag update, then starts the newly installed version.
-    if not arguments.background and install_and_start_launch_agent():
-        open_churchboard_when_ready(arguments.page)
-        raise SystemExit(0)
-    if churchboard_is_running():
+    app.state.macos_launchservices = bool(arguments.launchservices)
+    if compatible_desktop_is_running():
         if not arguments.background:
             open_churchboard(arguments.page)
+        raise SystemExit(0)
+    # A previous release may still own the port after an in-place update. Only
+    # stop a listener after verifying that its executable is ChurchBoard.
+    if running_churchboard_info():
+        stop_incompatible_churchboard()
+    # Launch installed Mac builds through LaunchServices. Starting the inner
+    # executable directly from a LaunchAgent does not reliably create a Dock
+    # application.
+    if not arguments.background and install_and_start_launch_agent():
+        open_churchboard_when_ready(arguments.page)
         raise SystemExit(0)
     if not arguments.background:
         threading.Timer(1.25, open_churchboard, args=(arguments.page,)).start()

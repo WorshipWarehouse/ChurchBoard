@@ -19,9 +19,15 @@ def is_installed_macos_app(executable: Path | None = None) -> bool:
 def launch_agent_payload(executable: Path, home: Path) -> dict[str, object]:
     data_dir = home / ".churchboard"
     log_dir = home / "Library" / "Logs"
+    app_bundle = executable.parents[2]
     return {
         "Label": LAUNCH_AGENT_LABEL,
-        "ProgramArguments": [str(executable), "--background"],
+        # Launch the bundle through LaunchServices so macOS registers a real
+        # GUI application with a Dock icon. -n ensures the bootstrap instance
+        # can hand off to a separate background instance on first launch.
+        "ProgramArguments": [
+            "/usr/bin/open", "-n", str(app_bundle), "--args", "--background", "--launchservices",
+        ],
         "EnvironmentVariables": {"CHURCHBOARD_DATA_DIR": str(data_dir)},
         "RunAtLoad": True,
         "KeepAlive": False,
@@ -73,12 +79,6 @@ def install_and_start_launch_agent(
     if result.returncode == 0:
         subprocess.run(
             ["/bin/launchctl", "enable", f"{domain}/{LAUNCH_AGENT_LABEL}"],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        subprocess.run(
-            ["/bin/launchctl", "kickstart", "-k", f"{domain}/{LAUNCH_AGENT_LABEL}"],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

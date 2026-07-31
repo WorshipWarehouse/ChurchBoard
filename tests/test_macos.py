@@ -20,7 +20,9 @@ class MacOSInstallerTests(unittest.TestCase):
             home = Path(directory)
             executable = Path("/Applications/ChurchBoard.app/Contents/MacOS/ChurchBoard")
             payload = launch_agent_payload(executable, home)
-            self.assertEqual(payload["ProgramArguments"], [str(executable), "--background"])
+            self.assertEqual(payload["ProgramArguments"], [
+                "/usr/bin/open", "-n", "/Applications/ChurchBoard.app", "--args", "--background", "--launchservices",
+            ])
             self.assertEqual(payload["EnvironmentVariables"], {"CHURCHBOARD_DATA_DIR": str(home / ".churchboard")})
             self.assertEqual(payload["StandardErrorPath"], str(home / "Library" / "Logs" / "ChurchBoard.error.log"))
             self.assertTrue(payload["RunAtLoad"])
@@ -47,7 +49,7 @@ class MacOSInstallerTests(unittest.TestCase):
             self.assertEqual(commands[0][:2], ["/bin/launchctl", "bootout"])
             self.assertEqual(commands[1][:2], ["/bin/launchctl", "bootstrap"])
             self.assertEqual(commands[2][:2], ["/bin/launchctl", "enable"])
-            self.assertEqual(commands[3][:2], ["/bin/launchctl", "kickstart"])
+            self.assertEqual(len(commands), 3)
 
 
 if __name__ == "__main__":

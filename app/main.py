@@ -166,7 +166,12 @@ async def get_runtime(request: Request) -> dict:
 
 @app.get("/api/app-info")
 async def get_app_info(request: Request) -> dict:
-    return {"instance_id": request.app.state.instance_id, "version": request.app.version}
+    return {
+        "instance_id": request.app.state.instance_id,
+        "version": request.app.version,
+        "desktop_tray": bool(getattr(request.app.state, "desktop_tray", False)),
+        "macos_launchservices": bool(getattr(request.app.state, "macos_launchservices", False)),
+    }
 
 
 def require_local_desktop(request: Request) -> None:
