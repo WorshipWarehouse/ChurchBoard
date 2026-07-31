@@ -1,0 +1,56 @@
+#!/bin/zsh
+set -euo pipefail
+
+CONSOLE_USER="$(/usr/bin/stat -f '%Su' /dev/console)"
+if [[ -z "$CONSOLE_USER" || "$CONSOLE_USER" == "root" || "$CONSOLE_USER" == "loginwindow" ]]; then
+  exit 0
+fi
+
+USER_HOME="$(/usr/bin/dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory | /usr/bin/awk '{print $2}')"
+USER_ID="$(/usr/bin/id -u "$CONSOLE_USER")"
+LAUNCH_AGENT_DIR="$USER_HOME/Library/LaunchAgents"
+LOG_DIR="$USER_HOME/Library/Logs"
+DATA_DIR="$USER_HOME/.churchboard"
+PLIST="$LAUNCH_AGENT_DIR/org.churchboard.app.plist"
+
+/bin/mkdir -p "$LAUNCH_AGENT_DIR" "$LOG_DIR" "$DATA_DIR"
+/bin/cat > "$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>org.churchboard.app</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Applications/ChurchBoard.app/Contents/MacOS/ChurchBoard</string>
+    <string>--background</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CHURCHBOARD_DATA_DIR</key>
+    <string>$DATA_DIR</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>$LOG_DIR/ChurchBoard.log</string>
+  <key>StandardErrorPath</key>
+  <string>$LOG_DIR/ChurchBoard.error.log</string>
+</dict>
+</plist>
+EOF
+
+/usr/sbin/chown -R "$CONSOLE_USER":staff "$LAUNCH_AGENT_DIR" "$LOG_DIR" "$DATA_DIR"
+/bin/launchctl bootout "gui/$USER_ID" "$PLIST" >/dev/null 2>&1 || true
+/bin/launchctl bootstrap "gui/$USER_ID" "$PLIST" >/dev/null 2>&1 || true
+/bin/launchctl enable "gui/$USER_ID/org.churchboard.app" >/dev/null 2>&1 || true
+
+(
+  /bin/sleep 2
+  /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "http://127.0.0.1:8040/admin"
+) >/dev/null 2>&1 &
+
+exit 0

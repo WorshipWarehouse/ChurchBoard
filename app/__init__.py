@@ -1,0 +1,2 @@
+"""ChurchBoard application package."""
+

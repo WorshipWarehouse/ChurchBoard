@@ -1,0 +1,20 @@
+[Unit]
+Description=ChurchBoard production dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__GROUP__
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=__INSTALL_DIR__/.venv/bin/python __INSTALL_DIR__/run.py --background
+Restart=always
+RestartSec=3
+Environment=HOME=__HOME__
+Environment=PYTHONUNBUFFERED=1
+Environment=CHURCHBOARD_HOST=0.0.0.0
+Environment=CHURCHBOARD_DATA_DIR=__DATA_DIR__
+
+[Install]
+WantedBy=multi-user.target

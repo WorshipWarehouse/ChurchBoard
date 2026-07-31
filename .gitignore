@@ -1,0 +1,9 @@
+.venv/
+.build-venv/
+__pycache__/
+*.pyc
+.DS_Store
+data/churchboard.json
+data/*.log
+build/
+dist/

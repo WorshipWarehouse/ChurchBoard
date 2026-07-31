@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPOSITORY="${CHURCHBOARD_REPOSITORY:-wtapper89/ChurchBoard}"
+REF="${CHURCHBOARD_REF:-main}"
+ENABLE_KIOSK=false
+
+usage() {
+  cat <<'EOF'
+Install ChurchBoard on Raspberry Pi OS.
+
+Usage:
+  install.sh [--kiosk] [--ref BRANCH_OR_TAG]
+
+Options:
+  --kiosk       Open the Main dashboard fullscreen after desktop login.
+  --ref VALUE   Install a specific Git branch or tag (default: main).
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --kiosk) ENABLE_KIOSK=true; shift ;;
+    --ref) REF="${2:?--ref requires a branch or tag}"; shift 2 ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+if [[ "${EUID}" -eq 0 ]]; then
+  echo "Run this installer as your normal Raspberry Pi desktop user, not root." >&2
+  exit 1
+fi
+
+for command in sudo curl tar python3; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "$command is required." >&2
+    exit 1
+  fi
+done
+
+echo "Installing Raspberry Pi prerequisites…"
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip curl ca-certificates
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+LOCAL_PROJECT="$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd || true)"
+TEMP_DIR=""
+if [[ -n "$LOCAL_PROJECT" && -f "$LOCAL_PROJECT/app/main.py" ]]; then
+  SOURCE_DIR="$LOCAL_PROJECT"
+else
+  TEMP_DIR="$(mktemp -d)"
+  trap '[[ -n "${TEMP_DIR:-}" ]] && /bin/rm -rf "$TEMP_DIR"' EXIT
+  SOURCE_DIR="$TEMP_DIR/source"
+  mkdir -p "$SOURCE_DIR"
+  echo "Downloading ChurchBoard $REF from GitHub…"
+  if ! curl -fsSL "https://github.com/$REPOSITORY/archive/refs/heads/$REF.tar.gz" | tar -xz -C "$SOURCE_DIR" --strip-components=1; then
+    curl -fsSL "https://github.com/$REPOSITORY/archive/refs/tags/$REF.tar.gz" | tar -xz -C "$SOURCE_DIR" --strip-components=1
+  fi
+fi
+
+BASE_DIR="$HOME/.local/share/churchboard"
+INSTALL_DIR="$BASE_DIR/app"
+DATA_DIR="$BASE_DIR/data"
+BACKUP_DIR="$BASE_DIR/app.previous"
+mkdir -p "$BASE_DIR" "$DATA_DIR"
+if [[ -d "$INSTALL_DIR" ]]; then
+  /bin/rm -rf "$BACKUP_DIR"
+  /bin/mv "$INSTALL_DIR" "$BACKUP_DIR"
+fi
+
+restore_previous_install() {
+  if [[ -d "$BACKUP_DIR" ]]; then
+    /bin/rm -rf "$INSTALL_DIR"
+    /bin/mv "$BACKUP_DIR" "$INSTALL_DIR"
+    echo "The previous ChurchBoard installation was restored." >&2
+  fi
+}
+
+mkdir -p "$INSTALL_DIR"
+/bin/cp -R "$SOURCE_DIR/app" "$SOURCE_DIR/run.py" "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
+
+if ! python3 -m venv "$INSTALL_DIR/.venv"; then
+  restore_previous_install
+  exit 1
+fi
+if ! "$INSTALL_DIR/.venv/bin/python" -m pip install --upgrade pip; then
+  restore_previous_install
+  exit 1
+fi
+if ! "$INSTALL_DIR/.venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"; then
+  restore_previous_install
+  exit 1
+fi
+/bin/rm -rf "$BACKUP_DIR"
+
+SERVICE_TEMP="$(mktemp)"
+sed \
+  -e "s|__USER__|$USER|g" \
+  -e "s|__GROUP__|$(id -gn)|g" \
+  -e "s|__HOME__|$HOME|g" \
+  -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
+  -e "s|__DATA_DIR__|$DATA_DIR|g" \
+  "$SOURCE_DIR/installers/raspberry-pi/churchboard.service.in" > "$SERVICE_TEMP"
+sudo install -m 0644 "$SERVICE_TEMP" /etc/systemd/system/churchboard.service
+/bin/rm -f "$SERVICE_TEMP"
+sudo systemctl daemon-reload
+sudo systemctl enable --now churchboard.service
+
+if [[ "$ENABLE_KIOSK" == "true" ]]; then
+  echo "Installing Chromium kiosk startup…"
+  if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
+    sudo apt-get install -y chromium || sudo apt-get install -y chromium-browser
+  fi
+  mkdir -p "$HOME/.local/bin" "$HOME/.config/autostart"
+  install -m 0755 "$SOURCE_DIR/installers/raspberry-pi/churchboard-kiosk.sh" "$HOME/.local/bin/churchboard-kiosk"
+  install -m 0644 "$SOURCE_DIR/installers/raspberry-pi/churchboard-kiosk.desktop" "$HOME/.config/autostart/churchboard-kiosk.desktop"
+fi
+
+PI_ADDRESS="$(hostname -I 2>/dev/null | awk '{print $1}')"
+echo
+echo "ChurchBoard is installed and starts automatically at boot."
+echo "Setup on this Pi: http://127.0.0.1:8040/admin"
+if [[ -n "$PI_ADDRESS" ]]; then
+  echo "Setup from another computer: http://$PI_ADDRESS:8040/admin"
+fi
+if [[ "$ENABLE_KIOSK" == "true" ]]; then
+  echo "Kiosk mode will open after the next desktop login."
+fi

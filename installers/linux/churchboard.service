@@ -1,0 +1,18 @@
+[Unit]
+Description=ChurchBoard production dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=churchboard
+Group=churchboard
+WorkingDirectory=/var/lib/churchboard
+ExecStart=/opt/churchboard/ChurchBoard --background
+Restart=always
+RestartSec=3
+Environment=CHURCHBOARD_HOST=0.0.0.0
+Environment=CHURCHBOARD_DATA_DIR=/var/lib/churchboard
+
+[Install]
+WantedBy=multi-user.target

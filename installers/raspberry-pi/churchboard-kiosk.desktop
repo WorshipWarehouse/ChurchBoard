@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=ChurchBoard Kiosk
+Exec=/bin/bash -lc "$HOME/.local/bin/churchboard-kiosk"
+Terminal=false
+X-GNOME-Autostart-enabled=true

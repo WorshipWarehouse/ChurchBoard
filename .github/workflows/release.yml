@@ -1,0 +1,78 @@
+name: Build installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-intel, macos-15]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: chmod +x installers/macos/build.sh installers/macos/pkg-scripts/postinstall "installers/macos/Uninstall ChurchBoard.command"
+      - run: PYTHON=python3 installers/macos/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChurchBoard-${{ matrix.runner }}
+          path: |
+            dist/*.pkg
+            dist/*.dmg
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: choco install innosetup -y --no-progress
+      - shell: powershell
+        run: ./installers/windows/Build-Windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChurchBoard-Windows
+          path: dist/*Setup.exe
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: chmod +x installers/linux/*.sh installers/linux/debian/*
+      - run: PYTHON=python3 installers/linux/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChurchBoard-Linux
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*

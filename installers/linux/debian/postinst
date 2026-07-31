@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+if ! getent group churchboard >/dev/null; then
+  addgroup --system churchboard
+fi
+if ! getent passwd churchboard >/dev/null; then
+  adduser --system --ingroup churchboard --home /var/lib/churchboard --no-create-home --disabled-login churchboard
+fi
+
+mkdir -p /var/lib/churchboard
+chown churchboard:churchboard /var/lib/churchboard
+chmod 0750 /var/lib/churchboard
+systemctl daemon-reload
+systemctl enable --now churchboard.service

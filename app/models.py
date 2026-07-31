@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+import re
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class Widget(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    type: Literal["clock", "service", "timing", "assignments", "mics", "slides", "notes", "order", "person", "people", "spl", "controls", "text"]
+    x: int = Field(ge=0, le=23)
+    y: int = Field(ge=0, le=100)
+    w: int = Field(ge=1, le=24)
+    h: int = Field(ge=1, le=20)
+    title: str = Field(default="", max_length=100)
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class Dashboard(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    name: str = Field(min_length=1, max_length=100)
+    slug: str = Field(min_length=1, max_length=80)
+    theme: Literal["dark", "light"] = "dark"
+    columns: int = Field(default=12, ge=4, le=24)
+    row_height: int = Field(default=72, ge=40, le=160)
+    widgets: list[Widget] = Field(default_factory=list, max_length=50)
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value):
+            raise ValueError("Use lowercase letters, numbers, and hyphens")
+        return value
+
+
+class SettingsUpdate(BaseModel):
+    organization_name: str = Field(default="My Church", max_length=120)
+    timezone: str = Field(default="America/New_York", max_length=100)
+    demo_mode: bool = True
+    planning_center: dict[str, Any] = Field(default_factory=dict)
+    propresenter: dict[str, Any] = Field(default_factory=dict)
+    shure: dict[str, Any] = Field(default_factory=dict)
+    position_mic_map: dict[str, str] = Field(default_factory=dict)
+    manual_plan: dict[str, str] | None = None

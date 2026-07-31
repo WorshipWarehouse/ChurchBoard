@@ -1,0 +1,323 @@
+from __future__ import annotations
+
+import asyncio
+import re
+from typing import Any
+from urllib.parse import quote
+
+import httpx
+
+
+class ProPresenterClient:
+    def __init__(self, settings: dict[str, Any]):
+        self.settings = settings
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.settings.get("enabled") and self.settings.get("host"))
+
+    async def status(self) -> dict[str, Any]:
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        async with httpx.AsyncClient(timeout=3) as client:
+            response, active_response, index_response, playlist_response = await asyncio.gather(
+                client.get(f"{base}/v1/status/slide"),
+                client.get(f"{base}/v1/presentation/active"),
+                client.get(f"{base}/v1/presentation/slide_index"),
+                client.get(f"{base}/v1/playlist/active"),
+            )
+            response.raise_for_status()
+            slide = response.json()
+            active = active_response.json() if active_response.is_success else {}
+            index_payload = index_response.json() if index_response.is_success else 0
+            playlist_payload = playlist_response.json() if playlist_response.is_success else {}
+        current = slide.get("current") or {}
+        next_slide = slide.get("next") or {}
+        index = self._index(index_payload)
+        presentation = active.get("presentation", active)
+        cue_entries = self._cue_entries(presentation)
+        current_entry = cue_entries[index] if 0 <= index < len(cue_entries) else {}
+        next_entry = cue_entries[index + 1] if 0 <= index + 1 < len(cue_entries) else {}
+        current_details = current_entry.get("cue", {})
+        next_details = next_entry.get("cue", {})
+        current_result = self._slide(current)
+        next_result = self._slide(next_slide)
+        current_result["notes"] = current_result["notes"] or self._notes(current_details)
+        next_result["notes"] = next_result["notes"] or self._notes(next_details)
+        presentation_uuid = self._presentation_uuid(presentation)
+        playlist_context = self._playlist_context(playlist_payload)
+        current_result.update({
+            "part": current_entry.get("part", ""),
+            "color": current_entry.get("color", ""),
+            "index": index + 1,
+            "total": len(cue_entries),
+            "image_url": self._thumbnail_url(presentation_uuid, index, current_result["image_uuid"])
+            if current_result["image_uuid"] or current_details else "",
+        })
+        next_result.update({
+            "part": next_entry.get("part", ""),
+            "color": next_entry.get("color", ""),
+            "index": index + 2 if index + 1 < len(cue_entries) else 0,
+            "total": len(cue_entries),
+            "image_url": self._thumbnail_url(presentation_uuid, index + 1, next_result["image_uuid"])
+            if next_result["image_uuid"] or next_details else "",
+        })
+        return {
+            "connected": True,
+            "title": self._presentation_title(presentation),
+            "presentation_uuid": presentation_uuid,
+            **playlist_context,
+            "current": current_result,
+            "next": next_result,
+            "presentation": presentation,
+        }
+
+    @staticmethod
+    def _playlist_context(raw: Any) -> dict[str, Any]:
+        destination = raw.get("presentation") if isinstance(raw, dict) else {}
+        destination = destination if isinstance(destination, dict) else {}
+        playlist = destination.get("playlist") if isinstance(destination.get("playlist"), dict) else {}
+        item = destination.get("item") if isinstance(destination.get("item"), dict) else {}
+        playlist_item = destination.get("playlist_item") if isinstance(destination.get("playlist_item"), dict) else {}
+        identifier = playlist_item.get("id") if isinstance(playlist_item.get("id"), dict) else {}
+        raw_index = item.get("index", identifier.get("index"))
+        try:
+            index = int(raw_index)
+            if index < 0 or index >= 2**31:
+                index = None
+        except (TypeError, ValueError):
+            index = None
+        return {
+            "service_item_title": str(item.get("name") or identifier.get("name") or "").strip(),
+            "service_item_index": index,
+            "service_item_is_pco": bool(playlist_item.get("is_pco")),
+            "playlist_name": str(playlist.get("name") or "").strip(),
+            "playlist_uuid": str(playlist.get("uuid") or "").strip(),
+        }
+
+    @staticmethod
+    def _slide(raw: Any) -> dict[str, Any]:
+        if not isinstance(raw, dict):
+            return {"text": str(raw or ""), "notes": "", "image_uuid": ""}
+        return {
+            "text": raw.get("text") or raw.get("label") or raw.get("name") or "",
+            "notes": raw.get("notes") or raw.get("slide_notes") or "",
+            "image_uuid": raw.get("image_uuid") or raw.get("uuid") or "",
+        }
+
+    @staticmethod
+    def _index(raw: Any) -> int:
+        if isinstance(raw, int):
+            return raw
+        if isinstance(raw, dict):
+            for key in ("index", "slide_index", "presentation_index"):
+                if key in raw:
+                    value = raw[key]
+                    if isinstance(value, dict):
+                        nested = ProPresenterClient._index(value)
+                        if nested >= 0:
+                            return nested
+                    else:
+                        try:
+                            return int(value)
+                        except (TypeError, ValueError):
+                            pass
+        return 0
+
+    @classmethod
+    def _cues(cls, raw: Any) -> list[dict[str, Any]]:
+        return [entry["cue"] for entry in cls._cue_entries(raw)]
+
+    @classmethod
+    def _cue_entries(
+        cls,
+        raw: Any,
+        inherited_part: str = "",
+        inherited_color: str = "",
+    ) -> list[dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return []
+
+        part = cls._part_name(raw) or inherited_part
+        color = cls._color(cls._raw_color(raw)) or inherited_color
+        direct = raw.get("cues") or raw.get("slides")
+        if isinstance(direct, list):
+            entries: list[dict[str, Any]] = []
+            for cue in direct:
+                if not isinstance(cue, dict):
+                    continue
+                # A cue's `label` is a per-slide label, not its Verse/Chorus
+                # group. Prefer explicit cue group data, then inherit the group.
+                cue_part = cls._cue_part_name(cue) or part
+                # ProPresenter also exposes a per-slide color. The part bug
+                # should use the enclosing Verse/Chorus group color.
+                cue_color = color or cls._color(cls._raw_color(cue))
+                entries.append({"cue": cue, "part": cue_part, "color": cue_color})
+            return entries
+
+        entries = []
+        groups = raw.get("groups") or []
+        if isinstance(groups, dict):
+            groups = list(groups.values())
+        for group in groups:
+            if isinstance(group, dict):
+                entries.extend(cls._cue_entries(group, part, color))
+        return entries
+
+    @classmethod
+    def _presentation_title(cls, raw: Any) -> str:
+        if not isinstance(raw, dict):
+            return ""
+        for key in ("name", "title", "presentation_name", "presentationName"):
+            value = raw.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        for key in ("id", "presentation"):
+            value = cls._presentation_title(raw.get(key))
+            if value:
+                return value
+        return ""
+
+    @classmethod
+    def _cue_part_name(cls, raw: Any) -> str:
+        if not isinstance(raw, dict):
+            return ""
+        for key in ("group_name", "groupName", "part"):
+            value = raw.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        group = raw.get("group")
+        if isinstance(group, str) and group.strip():
+            return group.strip()
+        if isinstance(group, dict):
+            for key in ("name", "label"):
+                value = group.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return ""
+
+    @staticmethod
+    def _presentation_uuid(raw: Any) -> str:
+        if not isinstance(raw, dict):
+            return ""
+        value = raw.get("uuid")
+        if isinstance(value, str):
+            return value
+        identifier = raw.get("id")
+        if isinstance(identifier, dict) and isinstance(identifier.get("uuid"), str):
+            return identifier["uuid"]
+        return ""
+
+    @staticmethod
+    def _thumbnail_url(presentation_uuid: str, index: int, revision: str = "") -> str:
+        if not presentation_uuid or index < 0 or not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid):
+            return ""
+        url = f"/api/integrations/propresenter/thumbnail/{quote(presentation_uuid, safe='')}/{index}"
+        if revision and re.fullmatch(r"[A-Za-z0-9-]+", revision):
+            url += f"?revision={quote(revision, safe='')}"
+        return url
+
+    async def thumbnail(self, presentation_uuid: str, index: int) -> tuple[bytes, str]:
+        if not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid) or index < 0:
+            raise ValueError("Invalid ProPresenter presentation or slide index")
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        async with httpx.AsyncClient(timeout=5) as client:
+            response = await client.get(
+                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/thumbnail/{index}",
+                params={"quality": 960, "thumbnail_type": "jpeg"},
+                headers={"Accept": "image/jpeg"},
+            )
+            response.raise_for_status()
+        return response.content, response.headers.get("content-type", "image/jpeg")
+
+    @classmethod
+    def _part_name(cls, raw: Any) -> str:
+        if not isinstance(raw, dict):
+            return ""
+        for key in ("group_name", "groupName", "part", "label"):
+            value = raw.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        group = raw.get("group")
+        if isinstance(group, str) and group.strip():
+            return group.strip()
+        for key in ("id", "group"):
+            nested = raw.get(key)
+            if isinstance(nested, dict):
+                for nested_key in ("name", "label"):
+                    value = nested.get(nested_key)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+
+        # Presentation group objects commonly use `name`; avoid interpreting cue
+        # names as song parts unless the object also contains slides/cues.
+        if any(key in raw for key in ("cues", "slides")):
+            value = raw.get("name")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return ""
+
+    @staticmethod
+    def _raw_color(raw: Any) -> Any:
+        if not isinstance(raw, dict):
+            return None
+        for key in ("group_color", "groupColor", "color"):
+            if raw.get(key) is not None:
+                return raw[key]
+        for key in ("id", "group"):
+            nested = raw.get(key)
+            if isinstance(nested, dict):
+                for color_key in ("group_color", "groupColor", "color"):
+                    if nested.get(color_key) is not None:
+                        return nested[color_key]
+        return None
+
+    @classmethod
+    def _color(cls, raw: Any) -> str:
+        if isinstance(raw, str):
+            value = raw.strip()
+            if re.fullmatch(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", value):
+                return value
+            if re.fullmatch(r"[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", value):
+                return f"#{value}"
+            numbers = value.replace(",", " ").split()
+            if len(numbers) in (3, 4):
+                try:
+                    return cls._rgba([float(number) for number in numbers])
+                except ValueError:
+                    return ""
+            return ""
+        if isinstance(raw, (list, tuple)) and len(raw) in (3, 4):
+            try:
+                return cls._rgba([float(number) for number in raw])
+            except (TypeError, ValueError):
+                return ""
+        if isinstance(raw, dict):
+            keys = ("red", "green", "blue", "alpha") if "red" in raw else ("r", "g", "b", "a")
+            if all(key in raw for key in keys[:3]):
+                try:
+                    return cls._rgba([float(raw[key]) for key in keys if key in raw])
+                except (TypeError, ValueError):
+                    return ""
+        return ""
+
+    @staticmethod
+    def _rgba(values: list[float]) -> str:
+        normalized = max(values[:3], default=0) <= 1
+        rgb = [round(max(0, min(1 if normalized else 255, value)) * (255 if normalized else 1)) for value in values[:3]]
+        if len(values) == 4:
+            alpha = max(0, min(1, values[3] if values[3] <= 1 else values[3] / 255))
+            return f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {alpha:g})"
+        return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+    @classmethod
+    def _notes(cls, raw: Any) -> str:
+        if isinstance(raw, dict):
+            for key in ("notes", "slide_notes"):
+                value = raw.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            for key in ("slide", "presentation", "action"):
+                value = cls._notes(raw.get(key))
+                if value:
+                    return value
+        return ""

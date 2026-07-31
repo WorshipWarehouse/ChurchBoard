@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+import threading
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
+
+
+DEFAULT_WIDGETS = [
+    {"id": "clock", "type": "clock", "x": 0, "y": 0, "w": 3, "h": 2, "title": "Local Time", "settings": {}},
+    {"id": "service", "type": "service", "x": 3, "y": 0, "w": 5, "h": 2, "title": "Service", "settings": {}},
+    {"id": "timing", "type": "timing", "x": 8, "y": 0, "w": 4, "h": 2, "title": "Timing", "settings": {}},
+    {"id": "assignments", "type": "assignments", "x": 0, "y": 2, "w": 7, "h": 6, "title": "Scheduled Positions & Mics", "settings": {"team_ids": [], "position_keys": [], "position_labels": {}, "positions": [], "display_mode": "photos", "use_planning_center_icon": False, "unassigned_media_title": "Icon"}},
+    {"id": "slides", "type": "slides", "x": 7, "y": 2, "w": 5, "h": 4, "title": "ProPresenter", "settings": {"show_notes": True, "slide_mode": "image", "show_current": True, "show_next": True, "show_slide_count": False}},
+    {"id": "order", "type": "order", "x": 7, "y": 6, "w": 5, "h": 2, "title": "Order of Service", "settings": {"limit": 4, "show_leader": False, "show_mic": False}},
+]
+
+
+def default_data() -> dict[str, Any]:
+    main_widgets = deepcopy(DEFAULT_WIDGETS)
+    green_room_widgets = deepcopy(DEFAULT_WIDGETS)
+    audio_widgets = deepcopy(DEFAULT_WIDGETS)
+    next(widget for widget in audio_widgets if widget["id"] == "assignments")["settings"]["display_mode"] = "technical"
+    return {
+        "version": 1,
+        "settings": {
+            "organization_name": "My Church",
+            "timezone": "America/New_York",
+            "demo_mode": True,
+            "planning_center": {
+                "enabled": False,
+                "application_id": "",
+                "secret": "",
+                "service_type_ids": [],
+                "service_types": [],
+                "open_days_before": 2,
+                "open_hours_before": 3,
+                "close_hours_after": 3,
+                "refresh_seconds": 60,
+                "live_from_propresenter": {
+                    "enabled": False,
+                    "auto_take_control": True,
+                    "songs_only": True,
+                    "allow_previous": False,
+                    "match_mode": "exact",
+                    "stable_seconds": 2,
+                    "refresh_seconds": 2,
+                },
+            },
+            "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.2},
+            "shure": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
+            "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
+            "manual_plan": None,
+        },
+        "dashboards": [
+            {"id": "main", "name": "Main", "slug": "main", "theme": "dark", "columns": 12, "row_height": 72, "widgets": main_widgets},
+            {"id": "green-room", "name": "Green Room", "slug": "green-room", "theme": "dark", "columns": 12, "row_height": 72, "widgets": green_room_widgets},
+            {"id": "audio", "name": "Audio Board", "slug": "audio", "theme": "dark", "columns": 12, "row_height": 72, "widgets": audio_widgets},
+        ],
+    }
+
+
+class ConfigStore:
+    def __init__(self, path: Path):
+        self.path = path
+        self._lock = threading.RLock()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.path.exists():
+            self.save(default_data())
+
+    def load(self) -> dict[str, Any]:
+        with self._lock:
+            try:
+                raw = json.loads(self.path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                raw = default_data()
+            baseline = default_data()
+            baseline.update(raw)
+            baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
+            for section in ("planning_center", "propresenter", "shure"):
+                baseline["settings"][section] = {
+                    **default_data()["settings"][section],
+                    **raw.get("settings", {}).get(section, {}),
+                }
+            baseline["settings"]["planning_center"]["live_from_propresenter"] = {
+                **default_data()["settings"]["planning_center"]["live_from_propresenter"],
+                **(raw.get("settings", {}).get("planning_center", {}).get("live_from_propresenter") or {}),
+            }
+            for dashboard in baseline.get("dashboards", []):
+                for widget in dashboard.get("widgets", []):
+                    if widget.get("type") == "mics":
+                        widget["type"] = "assignments"
+                        if widget.get("title") in {"", "Microphones"}:
+                            widget["title"] = "Scheduled Positions & Mics"
+                    if widget.get("type") == "assignments":
+                        widget["settings"] = {"team_ids": [], "position_keys": [], "position_labels": {}, "display_mode": "photos", "use_planning_center_icon": False, "unassigned_media_title": "Icon", **widget.get("settings", {})}
+                    if widget.get("type") == "slides":
+                        widget["settings"] = {"slide_mode": "image", "show_current": True, "show_next": True, "show_slide_count": False, "show_notes": True, **widget.get("settings", {})}
+                    if widget.get("type") == "order":
+                        widget["settings"] = {"limit": 4, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
+            return baseline
+
+    def save(self, data: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            fd, temporary = tempfile.mkstemp(prefix="churchboard-", suffix=".json", dir=self.path.parent)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    json.dump(data, handle, indent=2)
+                    handle.write("\n")
+                os.chmod(temporary, 0o600)
+                os.replace(temporary, self.path)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
+            return deepcopy(data)
+
+    def public_settings(self) -> dict[str, Any]:
+        settings = deepcopy(self.load()["settings"])
+        pc = settings.get("planning_center", {})
+        pc["secret_configured"] = bool(pc.get("secret"))
+        pc["secret"] = ""
+        return settings
