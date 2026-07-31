@@ -2,23 +2,6 @@
 
 ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, and Shure QLX-D/ULX-D microphone telemetry in configurable displays for the stage, green room, audio booth, and production team.
 
-## Download ChurchBoard
-
-Choose your computer and click its download link:
-
-| Your computer | Download |
-| --- | --- |
-| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-Windows-x64-Setup.exe)** |
-| **Mac with Apple silicon** — M1, M2, M3, M4, or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-macOS-arm64.dmg)** |
-| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-macOS-x86_64.dmg)** |
-| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-Linux-amd64.deb)** |
-| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-Linux-x86_64.tar.gz)** |
-
-Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it says **Chip**, use Apple silicon. If it says **Processor**, use Intel.
-
-**Raspberry Pi:** jump to the [one-command Raspberry Pi installer](#raspberry-pi).
-
-[View all v0.1.2 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.2)
 
 While this repository is private, GitHub requires testers to sign in before these download links work.
 
@@ -37,6 +20,25 @@ While this repository is private, GitHub requires testers to sign in before thes
 - A WYSIWYG dashboard editor with independent layouts for each destination
 
 ![ChurchBoard audio-board dashboard](docs/screenshots/audio-board.jpg)
+
+
+## Download ChurchBoard
+
+Choose your computer and click its download link:
+
+| Your computer | Download |
+| --- | --- |
+| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-Windows-x64-Setup.exe)** |
+| **Mac with Apple silicon** — M1, M2, M3, M4, or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-macOS-arm64.dmg)** |
+| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-macOS-x86_64.dmg)** |
+| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-Linux-amd64.deb)** |
+| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-0.1.2-Linux-x86_64.tar.gz)** |
+
+Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it says **Chip**, use Apple silicon. If it says **Processor**, use Intel.
+
+**Raspberry Pi:** jump to the [one-command Raspberry Pi installer](#raspberry-pi).
+
+[View all v0.1.2 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v0.1.2)
 
 ## Install
 
