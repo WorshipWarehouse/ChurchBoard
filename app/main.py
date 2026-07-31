@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from uuid import uuid4
+from zoneinfo import available_timezones
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
@@ -158,6 +159,11 @@ async def get_runtime(request: Request) -> dict:
 @app.get("/api/app-info")
 async def get_app_info(request: Request) -> dict:
     return {"instance_id": request.app.state.instance_id, "version": request.app.version}
+
+
+@app.get("/api/timezones")
+async def list_timezones() -> dict:
+    return {"items": sorted(available_timezones())}
 
 
 @app.post("/api/runtime/refresh")

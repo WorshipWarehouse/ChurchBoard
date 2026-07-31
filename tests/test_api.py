@@ -22,12 +22,23 @@ class ApiTests(unittest.TestCase):
         os.environ.pop("CHURCHBOARD_DATA_FILE", None)
 
     def test_setup_display_and_editor_pages_load(self):
-        self.assertEqual(self.client.get("/admin").status_code, 200)
+        admin = self.client.get("/admin")
+        self.assertEqual(admin.status_code, 200)
+        self.assertIn('select name="timezone"', admin.text)
+        self.assertNotIn('input name="timezone"', admin.text)
         display = self.client.get("/display/main")
         self.assertEqual(display.status_code, 200)
         self.assertEqual(display.headers["cache-control"], "no-store")
         self.assertEqual(self.client.get("/editor/main").status_code, 200)
         self.assertTrue(self.client.get("/api/app-info").json()["instance_id"])
+
+    def test_timezone_catalog_contains_standard_choices(self):
+        response = self.client.get("/api/timezones")
+        self.assertEqual(response.status_code, 200)
+        zones = response.json()["items"]
+        self.assertIn("UTC", zones)
+        self.assertIn("America/New_York", zones)
+        self.assertEqual(zones, sorted(zones))
 
     def test_dashboard_round_trip(self):
         board = self.client.get("/api/dashboards/main").json()

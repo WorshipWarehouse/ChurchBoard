@@ -64,7 +64,7 @@ This produces a portable `.tar.gz` and a `.deb` for the current architecture.
 
 ## Automated releases
 
-GitHub Actions runs tests on pushes and pull requests. The release workflow can be started manually for test artifacts. Pushing a tag such as `v0.1.1` builds macOS Intel, macOS Apple-silicon, Windows x64, and Linux packages and attaches them to a GitHub Release.
+GitHub Actions runs tests on pushes and pull requests. The release workflow can be started manually for test artifacts. Pushing a tag such as `v0.1.2` builds macOS Intel, macOS Apple-silicon, Windows x64, and Linux packages and attaches them to a GitHub Release.
 
 Before creating a release:
 
@@ -74,8 +74,8 @@ Before creating a release:
 4. Tag the exact commit:
 
    ```bash
-   git tag v0.1.1
-   git push origin v0.1.1
+   git tag v0.1.2
+   git push origin v0.1.2
    ```
 
 Production macOS distribution should add Developer ID signing and Apple notarization secrets to the workflow. Production Windows distribution should similarly add an Authenticode signing certificate.

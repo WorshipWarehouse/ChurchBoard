@@ -1,6 +1,26 @@
 let settings,micRows=[],positionTeams=[],serviceTypeRows=[];
 const cards=document.querySelector("#dashboard-cards"),sf=document.querySelector("#settings-form");
 const micId=()=>`mic-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+const fallbackTimezones=["UTC","America/Anchorage","America/Chicago","America/Denver","America/Halifax","America/Los_Angeles","America/New_York","America/Phoenix","America/St_Johns","America/Toronto","Asia/Dubai","Asia/Hong_Kong","Asia/Jerusalem","Asia/Kolkata","Asia/Seoul","Asia/Shanghai","Asia/Singapore","Asia/Tokyo","Australia/Adelaide","Australia/Brisbane","Australia/Darwin","Australia/Hobart","Australia/Melbourne","Australia/Perth","Australia/Sydney","Europe/Amsterdam","Europe/Berlin","Europe/Lisbon","Europe/London","Europe/Madrid","Europe/Paris","Europe/Rome","Pacific/Auckland","Pacific/Honolulu"];
+
+function browserTimezones(){
+  try{return typeof Intl.supportedValuesOf==="function"?Intl.supportedValuesOf("timeZone"):[]}catch(error){return[]}
+}
+
+function renderTimezoneOptions(items,current){
+  const select=sf.timezone,zones=[...new Set(["UTC",...items,...browserTimezones(),current].filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  select.replaceChildren();
+  const groups=new Map();
+  zones.forEach(zone=>{const [region,...place]=zone.split("/"),group=place.length?region:"General",label=(place.length?place.join(" / "):region).replaceAll("_"," ");if(!groups.has(group))groups.set(group,[]);groups.get(group).push({zone,label})});
+  [...groups].sort(([a],[b])=>a.localeCompare(b)).forEach(([region,options])=>{const group=document.createElement("optgroup");group.label=region.replaceAll("_"," ");options.forEach(({zone,label})=>{const option=document.createElement("option");option.value=zone;option.textContent=label;group.append(option)});select.append(group)});
+  select.value=current||"America/New_York";
+}
+
+async function loadTimezoneOptions(current){
+  let items=[];
+  try{items=(await api("/api/timezones")).items||[]}catch(error){items=fallbackTimezones}
+  renderTimezoneOptions(items.length?items:fallbackTimezones,current);
+}
 
 async function loadDashboards(){
   const data=await api("/api/dashboards");
@@ -44,7 +64,7 @@ async function loadSettings(){
   const pc=settings.planning_center||{},pp=settings.propresenter||{},sh=settings.shure||{},live=pc.live_from_propresenter||{};
   serviceTypeRows=pc.service_types||[];
   try{const runtime=await api("/api/runtime"),service=runtime.service||{},id=String(service.service_type_id||""),liveStatus=runtime.planning_center_live||{};if(id&&service.service_type_name&&!serviceTypeRows.some(item=>String(item.id)===id))serviceTypeRows.push({id,name:service.service_type_name});document.querySelector("#pp-live-status").textContent=liveStatus.message||""}catch(error){}
-  sf.organization_name.value=settings.organization_name||"";sf.timezone.value=settings.timezone||"";sf.demo_mode.checked=!!settings.demo_mode;
+  sf.organization_name.value=settings.organization_name||"";await loadTimezoneOptions(settings.timezone||"America/New_York");sf.demo_mode.checked=!!settings.demo_mode;
   sf.pc_enabled.checked=!!pc.enabled;sf.pc_application_id.value=pc.application_id||"";sf.pc_days.value=pc.open_days_before??2;sf.pc_hours.value=pc.open_hours_before??3;sf.pc_close.value=pc.close_hours_after??3;
   sf.pp_enabled.checked=!!pp.enabled;sf.pp_host.value=pp.host||"127.0.0.1";sf.pp_port.value=pp.port||50001;sf.shure_enabled.checked=!!sh.enabled;
   sf.pp_live_enabled.checked=!!live.enabled;sf.pp_live_take_control.checked=live.auto_take_control!==false;sf.pp_live_songs_only.checked=live.songs_only!==false;sf.pp_live_allow_previous.checked=!!live.allow_previous;sf.pp_live_match_mode.value=live.match_mode||"exact";sf.pp_live_stable_seconds.value=Number(live.stable_seconds??2);
