@@ -295,6 +295,18 @@ class ShureStatusTests(unittest.IsolatedAsyncioTestCase):
 
 
 class RuntimeAssignmentTests(unittest.TestCase):
+    def test_live_mode_without_configured_mics_drops_seeded_demo_telemetry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "state.json")
+            data = store.load()
+            data["settings"]["demo_mode"] = False
+            data["settings"]["shure"] = {"enabled": False, "receivers": [], "mics": []}
+            store.save(data)
+            runtime = RuntimeService(store)
+            self.assertTrue(runtime.state["mics"])
+            state = asyncio.run(runtime.refresh(force=True))
+            self.assertEqual(state["mics"], [])
+
     def test_position_key_maps_a_scheduled_person_to_named_mic(self):
         state = {
             "people": [{"name": "Jordan Lee", "position": "Vox 1", "position_key": "band::vox 1", "team_name": "Band"}],

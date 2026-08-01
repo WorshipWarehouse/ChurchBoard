@@ -1,4 +1,4 @@
-let dashboard, lastState={},serverInstance="",refreshInFlight=false;
+let dashboard, lastState={},serverInstance="",refreshInFlight=false,planOptionsKey="",planSelectionInFlight=false;
 const widgetRenderKeys=new Map();
 const slug=decodeURIComponent(location.pathname.split("/").pop());
 const splEngine={context:null,analyser:null,bins:null,stream:null,running:false,autoAttempted:false,rawDb:null};
@@ -60,13 +60,29 @@ document.addEventListener("click",async event=>{
   const button=event.target.closest("[data-service-action]");if(!button)return;button.disabled=true;const status=button.closest(".service-controls")?.querySelector("[data-control-status]");if(status)status.textContent="Updating…";
   try{lastState=await api(`/api/service-control/${button.dataset.serviceAction}`,{method:"POST"});render();updatePlans()}catch(error){button.disabled=false;if(status)status.textContent=error.message}
 });
-document.querySelector(".hamburger").addEventListener("click",()=>document.querySelector(".display-menu").classList.toggle("open"));
+const displayMenu=document.querySelector(".display-menu"),menuButton=document.querySelector(".hamburger");
+function setMenuOpen(open){displayMenu.classList.toggle("open",open);displayMenu.setAttribute("aria-hidden",String(!open));menuButton.setAttribute("aria-expanded",String(open));menuButton.setAttribute("aria-label",open?"Close menu":"Open menu")}
+menuButton.addEventListener("click",event=>{event.stopPropagation();setMenuOpen(!displayMenu.classList.contains("open"))});
+document.addEventListener("click",event=>{if(displayMenu.classList.contains("open")&&!displayMenu.contains(event.target)&&!menuButton.contains(event.target))setMenuOpen(false)});
+document.addEventListener("keydown",event=>{if(event.key==="Escape"&&displayMenu.classList.contains("open")){setMenuOpen(false);menuButton.focus()}});
 const fullscreenButton=document.querySelector(".fullscreen-toggle");
 const fullscreenElement=()=>document.fullscreenElement||document.webkitFullscreenElement;
 function updateFullscreenButton(){const active=!!fullscreenElement();fullscreenButton.classList.toggle("is-fullscreen",active);fullscreenButton.textContent=active?"↙":"⛶";fullscreenButton.setAttribute("aria-label",active?"Exit fullscreen":"Enter fullscreen");fullscreenButton.title=active?"Exit fullscreen":"Enter fullscreen"}
 fullscreenButton.addEventListener("click",async()=>{try{if(fullscreenElement()){const exit=document.exitFullscreen||document.webkitExitFullscreen;if(exit)await exit.call(document)}else{const enter=document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen;if(enter)await enter.call(document.documentElement)}}catch(error){console.error(error)}updateFullscreenButton()});
 document.addEventListener("fullscreenchange",updateFullscreenButton);document.addEventListener("webkitfullscreenchange",updateFullscreenButton);updateFullscreenButton();
-function updatePlans(){const select=document.querySelector("#active-plan"), manual=lastState.manual_plan, current=select.value||(manual?`${manual.service_type_id}:${manual.id}`:"");select.innerHTML='<option value="">Automatic</option>'+(lastState.plans||[]).map(plan=>`<option value="${escapeHtml(plan.service_type_id)}:${escapeHtml(plan.id)}">${escapeHtml(plan.title||plan.service_type_name)} · ${escapeHtml(plan.dates||"")}</option>`).join("");select.value=current}
-document.querySelector("#active-plan").addEventListener("change",async event=>{const [service_type_id,id]=event.target.value.split(":");lastState=await api("/api/active-plan",{method:"PUT",body:JSON.stringify(id?{id,service_type_id}:{})});render()});
+function updatePlans(){
+  const select=document.querySelector("#active-plan"),plans=lastState.plans||[],optionsKey=JSON.stringify(plans.map(plan=>[plan.service_type_id,plan.id,plan.title||plan.service_type_name,plan.dates||""]));
+  if(optionsKey!==planOptionsKey){select.innerHTML='<option value="">Automatic</option>'+plans.map(plan=>`<option value="${escapeHtml(plan.service_type_id)}:${escapeHtml(plan.id)}">${escapeHtml(plan.title||plan.service_type_name)} · ${escapeHtml(plan.dates||"")}</option>`).join("");planOptionsKey=optionsKey}
+  if(planSelectionInFlight)return;
+  const manual=lastState.manual_plan,desired=manual?`${manual.service_type_id}:${manual.id}`:"";
+  if(select.value!==desired)select.value=desired;
+}
+document.querySelector("#active-plan").addEventListener("change",async event=>{
+  const select=event.currentTarget,status=document.querySelector("#active-plan-status"),[service_type_id,id]=select.value.split(":");
+  planSelectionInFlight=true;select.disabled=true;status.textContent="Selecting service…";
+  try{lastState=await api("/api/active-plan",{method:"PUT",body:JSON.stringify(id?{id,service_type_id}:{})});render();status.textContent="";setMenuOpen(false)}
+  catch(error){status.textContent=error.message}
+  finally{planSelectionInFlight=false;select.disabled=false;updatePlans()}
+});
 api("/api/dashboards").then(data=>document.querySelector("#board-links").innerHTML=data.items.map(item=>`<div class="board-menu-row"><a class="board-menu-open" href="/display/${encodeURIComponent(item.slug)}">${escapeHtml(item.name)}</a><a class="board-menu-edit" href="/editor/${encodeURIComponent(item.slug)}" aria-label="Edit ${escapeHtml(item.name)}">Edit</a></div>`).join(""));
 checkServerInstance();loadBoard(); setInterval(refresh,200); setInterval(tickClocks,250);setInterval(checkServerInstance,5000);

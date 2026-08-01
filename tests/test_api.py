@@ -34,6 +34,8 @@ class ApiTests(unittest.TestCase):
         display = self.client.get("/display/main")
         self.assertEqual(display.status_code, 200)
         self.assertIn('class="menu-brand"', display.text)
+        self.assertIn('aria-controls="display-menu"', display.text)
+        self.assertIn('id="active-plan-status"', display.text)
         self.assertEqual(display.headers["cache-control"], "no-store")
         editor = self.client.get("/editor/main")
         self.assertEqual(editor.status_code, 200)
@@ -44,6 +46,8 @@ class ApiTests(unittest.TestCase):
         display_script = self.client.get("/static/display.js").text
         self.assertIn('class="board-menu-edit"', display_script)
         self.assertIn('/editor/${encodeURIComponent(item.slug)}', display_script)
+        self.assertIn('planSelectionInFlight', display_script)
+        self.assertIn('event.key==="Escape"', display_script)
         common_script = self.client.get("/static/common.js").text
         self.assertIn('class="unassigned-board-icon"', common_script)
         stylesheet = self.client.get("/static/style.css").text

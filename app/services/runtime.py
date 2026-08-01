@@ -123,6 +123,11 @@ class RuntimeService:
         if shure.configured and (force or shure_due):
             next_state["mics"] = await shure.status()
             self._last_refresh["shure"] = clock
+        elif not shure.configured:
+            # Runtime starts with demonstration content so the first launch is
+            # useful. Once demo mode is off, never carry those sample mics into
+            # a real Planning Center plan that has no Shure configuration.
+            next_state["mics"] = []
         self._apply_assignments(next_state, config.get("position_mic_map", {}))
         self._apply_service_control(next_state)
         self.state = next_state
