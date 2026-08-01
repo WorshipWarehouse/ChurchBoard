@@ -183,9 +183,8 @@ class RuntimeService:
             return
         if signature == self._pp_live_handled:
             return
-        self._pp_live_handled = signature
-
         if not target:
+            self._pp_live_handled = signature
             state["planning_center_live"] = {**base_status, "state": "no_match", "presentation_title": title, "service_item_title": service_item_title, "message": f"No Planning Center item matched “{match_title}”"}
             return
         try:
@@ -193,13 +192,17 @@ class RuntimeService:
             if not live:
                 state["planning_center_live"] = {**base_status, "state": "needs_live", "presentation_title": title, "target_item_id": target.get("id"), "target_item_title": target.get("title"), "message": "Open Services LIVE for this plan, then change to the presentation again"}
                 return
-            if not live.get("can_control"):
-                if settings.get("auto_take_control", True) and live.get("can_take_control"):
+            if not live.get("has_control"):
+                can_claim_control = bool(live.get("can_control") or live.get("can_take_control"))
+                if settings.get("auto_take_control", True) and can_claim_control:
                     live = await pc.live_action(service, live, "toggle_control") or live
                 else:
-                    reason = "This Planning Center token cannot take control" if not live.get("can_take_control") else "Take control in Services LIVE first"
+                    reason = "This Planning Center token cannot take control" if not can_claim_control else "Take control in Services LIVE first"
                     state["planning_center_live"] = {**base_status, "state": "needs_control", "presentation_title": title, "target_item_id": target.get("id"), "target_item_title": target.get("title"), "message": reason}
+                    self._pp_live_candidate_since = clock
                     return
+            if not live.get("has_control"):
+                raise ValueError("ChurchBoard requested control, but Planning Center did not assign it")
             items = service.get("items") or []
             current_index = next((index for index, item in enumerate(items) if str(item.get("id")) == str(live.get("current_item_id"))), -1)
             target_index = next((index for index, item in enumerate(items) if str(item.get("id")) == str(target.get("id"))), -1)
@@ -213,6 +216,7 @@ class RuntimeService:
             else:
                 difference = target_index - current_index
             if difference < 0 and not settings.get("allow_previous", False):
+                self._pp_live_handled = signature
                 state["planning_center_live"] = {**self._live_status_payload(live), "state": "behind", "presentation_title": title, "target_item_id": target.get("id"), "target_item_title": target.get("title"), "message": f"“{title}” is behind the current LIVE item; backward movement is disabled"}
                 return
             if abs(difference) > 20:
@@ -223,9 +227,14 @@ class RuntimeService:
             self._service_control = {"active": False}
             self._remember_live(service, live)
             self._apply_live_timing(state, live)
+            self._pp_live_handled = signature
             source = "Planning Center playlist" if is_pco_item and service_item_title else "presentation title"
             state["planning_center_live"] = {**self._live_status_payload(live), "state": "synced", "presentation_title": title, "service_item_title": service_item_title, "match_source": source, "target_item_id": target.get("id"), "target_item_title": target.get("title"), "message": f"Matched {target.get('title')} from the {source}"}
         except Exception as exc:
+            # Let the same presentation retry after the stability delay. This
+            # is important when an operator grants LIVE control after an error.
+            self._pp_live_handled = ""
+            self._pp_live_candidate_since = clock
             state["planning_center_live"] = {**base_status, "state": "error", "presentation_title": title, "target_item_id": target.get("id"), "target_item_title": target.get("title"), "message": f"Services LIVE control failed: {exc}"}
 
     @staticmethod
@@ -293,7 +302,7 @@ class RuntimeService:
 
     @staticmethod
     def _live_status_payload(live: dict[str, Any], previous: dict[str, Any] | None = None) -> dict[str, Any]:
-        return {**(previous or {}), "enabled": True, "state": "live", "live_id": live.get("id"), "can_control": bool(live.get("can_control")), "can_take_control": bool(live.get("can_take_control")), "current_item_id": live.get("current_item_id"), "message": "Connected to Planning Center Services LIVE"}
+        return {**(previous or {}), "enabled": True, "state": "live", "live_id": live.get("id"), "can_control": bool(live.get("can_control")), "can_take_control": bool(live.get("can_take_control")), "has_control": bool(live.get("has_control")), "controller": live.get("controller") or "", "current_item_id": live.get("current_item_id"), "message": "Connected to Planning Center Services LIVE"}
 
     def _remember_live(self, service: dict[str, Any], live: dict[str, Any]) -> None:
         self._last_live = {**live, "_service_id": str(service.get("id") or "")}
@@ -338,24 +347,28 @@ class RuntimeService:
                 if not live:
                     raise ValueError("Open Services LIVE for the active plan first")
                 if action == "take":
-                    if not live.get("can_control"):
-                        if not live.get("can_take_control"):
+                    if not live.get("has_control"):
+                        if not (live.get("can_control") or live.get("can_take_control")):
                             raise ValueError("This Planning Center token cannot take control of Services LIVE")
                         live = await pc.live_action(service, live, "toggle_control") or live
                 elif action == "release":
-                    if live.get("can_control"):
+                    if live.get("has_control"):
                         live = await pc.live_action(service, live, "toggle_control") or live
                 elif action in {"next", "previous"}:
-                    if not live.get("can_control"):
-                        if not live_settings.get("auto_take_control", True) or not live.get("can_take_control"):
+                    if not live.get("has_control"):
+                        can_claim_control = bool(live.get("can_control") or live.get("can_take_control"))
+                        if not live_settings.get("auto_take_control", True) or not can_claim_control:
                             raise ValueError("Take control of Services LIVE first")
                         live = await pc.live_action(service, live, "toggle_control") or live
+                    if not live.get("has_control"):
+                        raise ValueError("ChurchBoard requested control, but Planning Center did not assign it")
                     live = await pc.live_action(service, live, "go_to_next_item" if action == "next" else "go_to_previous_item") or live
                 else:
                     raise ValueError("Unknown service control action")
                 self._service_control = {"active": False}
                 self._remember_live(service, live)
                 self._apply_live_timing(self.state, live)
+                self._pp_live_handled = ""
                 self.state["planning_center_live"] = {**self._live_status_payload(live), "state": "live", "message": "Services LIVE was updated manually"}
                 return self.state
             except ValueError:

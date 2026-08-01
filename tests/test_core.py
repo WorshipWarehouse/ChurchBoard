@@ -221,15 +221,28 @@ class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
         async def fake_get(path, params=None):
             self.assertIn("/live", path)
             return {
-                "data": [{"type": "Live", "id": "live-1", "attributes": {"can_control": True, "can_take_control": False}, "relationships": {"current_item_time": {"data": {"type": "ItemTime", "id": "time-1"}}}}],
-                "included": [{"type": "ItemTime", "id": "time-1", "attributes": {"live_start_at": "2030-01-01T12:00:00Z", "live_end_at": None}, "relationships": {"item": {"data": {"type": "Item", "id": "item-2"}}}}],
+                "data": [{"type": "Live", "id": "live-1", "attributes": {"can_control": True, "can_take_control": False}, "relationships": {"controller": {"data": {"type": "Person", "id": "person-1"}}, "current_item_time": {"data": {"type": "ItemTime", "id": "time-1"}}}}],
+                "included": [{"type": "Person", "id": "person-1", "attributes": {"full_name": "Jordan Lee"}}, {"type": "ItemTime", "id": "time-1", "attributes": {"live_start_at": "2030-01-01T12:00:00Z", "live_end_at": None}, "relationships": {"item": {"data": {"type": "Item", "id": "item-2"}}}}],
             }
 
         client._get = fake_get
         live = await client.live_status({"id": "plan-1", "service_type_id": "type-1", "series_id": "series-1"})
         self.assertTrue(live["can_control"])
+        self.assertTrue(live["has_control"])
+        self.assertEqual(live["controller"], "Jordan Lee")
         self.assertEqual(live["current_item_id"], "item-2")
         self.assertEqual(live["current_live_start_at"], "2030-01-01T12:00:00Z")
+
+    async def test_live_permission_without_a_controller_is_not_ownership(self):
+        client = PlanningCenterClient({"enabled": True, "application_id": "id", "secret": "secret"})
+
+        async def fake_get(path, params=None):
+            return {"data": [{"type": "Live", "id": "live-1", "attributes": {"can_control": True, "can_take_control": True}, "relationships": {"controller": {"data": None}}}]}
+
+        client._get = fake_get
+        live = await client.live_status({"id": "plan-1", "service_type_id": "type-1"})
+        self.assertTrue(live["can_control"])
+        self.assertFalse(live["has_control"])
 
 
 class ShureTests(unittest.TestCase):
@@ -394,7 +407,7 @@ class ProPresenterLiveSyncTests(unittest.IsolatedAsyncioTestCase):
                     self.control = False
 
                 async def live_status(self, _plan, create=False):
-                    return {"id": "live", "series_id": "series", "can_control": self.control, "can_take_control": True, "current_item_id": self.current, "current_live_start_at": "2030-01-01T12:00:00Z"}
+                    return {"id": "live", "series_id": "series", "can_control": True, "can_take_control": True, "has_control": self.control, "current_item_id": self.current, "current_live_start_at": "2030-01-01T12:00:00Z"}
 
                 async def live_action(self, _plan, _live, action):
                     self.actions.append(action)
@@ -413,6 +426,45 @@ class ProPresenterLiveSyncTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(state["timing"]["current_item"]["id"], "3")
             self.assertEqual(state["timing"]["source"], "planning_center_live")
 
+    async def test_same_presentation_retries_after_live_action_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = RuntimeService(ConfigStore(Path(directory) / "state.json"))
+            state = {
+                "service": {"id": "plan", "service_type_id": "type", "starts_at": "2030-01-01T12:00:00+00:00", "items": [
+                    {"id": "1", "title": "Welcome", "item_type": "item", "length": 60, "starts_after": 0},
+                    {"id": "2", "title": "Message", "item_type": "item", "length": 120, "starts_after": 60},
+                ]},
+                "propresenter": {"connected": True, "title": "John 1:1-3", "service_item_title": "Message", "service_item_is_pco": True, "presentation_uuid": "pp-message"},
+                "timing": {"current_item": {"id": "1"}},
+            }
+
+            class FlakyLiveClient:
+                configured = True
+
+                def __init__(self):
+                    self.attempts = 0
+                    self.current = "1"
+
+                async def live_status(self, _plan, create=False):
+                    return {"id": "live", "can_control": True, "can_take_control": True, "has_control": True, "current_item_id": self.current, "current_live_start_at": "2030-01-01T12:00:00Z"}
+
+                async def live_action(self, _plan, _live, action):
+                    self.attempts += 1
+                    if self.attempts == 1:
+                        raise ValueError("temporary LIVE ownership failure")
+                    self.current = "2"
+                    return await self.live_status(_plan)
+
+            client = FlakyLiveClient()
+            settings = {"enabled": True, "auto_take_control": True, "songs_only": False, "allow_previous": False, "match_mode": "exact", "stable_seconds": 0, "refresh_seconds": 2}
+            await runtime._sync_propresenter_live(state, client, settings, 10)
+            await runtime._sync_propresenter_live(state, client, settings, 10.1)
+            self.assertEqual(state["planning_center_live"]["state"], "error")
+            await runtime._sync_propresenter_live(state, client, settings, 10.2)
+            self.assertEqual(client.attempts, 2)
+            self.assertEqual(state["planning_center_live"]["state"], "synced")
+            self.assertEqual(state["timing"]["current_item"]["id"], "2")
+
     async def test_manual_controls_use_services_live_when_automation_is_enabled(self):
         with tempfile.TemporaryDirectory() as directory:
             store = ConfigStore(Path(directory) / "state.json")
@@ -429,7 +481,7 @@ class ProPresenterLiveSyncTests(unittest.IsolatedAsyncioTestCase):
 
             class FakeClient:
                 async def live_status(self, _plan, create=False):
-                    return {"id": "live", "can_control": True, "can_take_control": True, "current_item_id": "1", "current_live_start_at": "2030-01-01T12:00:00Z"}
+                    return {"id": "live", "can_control": True, "can_take_control": True, "has_control": True, "current_item_id": "1", "current_live_start_at": "2030-01-01T12:00:00Z"}
 
                 async def live_action(self, _plan, _live, action):
                     self.action = action

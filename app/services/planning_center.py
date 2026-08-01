@@ -372,6 +372,10 @@ class PlanningCenterClient:
                     raise
 
         included = {(str(row.get("type")), str(row.get("id"))): row for row in payload.get("included", [])}
+        controller_relation = (((live.get("relationships") or {}).get("controller") or {}).get("data") or {})
+        controller_id = str(controller_relation.get("id") or "")
+        controller_row = included.get((str(controller_relation.get("type")), controller_id), {})
+        controller_attributes = controller_row.get("attributes") or {}
         current_relation = (((live.get("relationships") or {}).get("current_item_time") or {}).get("data") or {})
         current_time = included.get((str(current_relation.get("type")), str(current_relation.get("id"))))
         current_link = str(links.get("current_item_time") or "")
@@ -404,7 +408,11 @@ class PlanningCenterClient:
             "action_paths": action_paths,
             "can_control": bool(attributes.get("can_control")),
             "can_take_control": bool(attributes.get("can_take_control")),
-            "controller": attributes.get("controller_name") or "",
+            # can_control describes permission/availability. A controller
+            # relationship is the signal that this user actually owns LIVE.
+            "has_control": bool(controller_id and attributes.get("can_control")),
+            "controller_id": controller_id,
+            "controller": controller_attributes.get("full_name") or attributes.get("controller_name") or "",
             "current_item_id": str(item_relation.get("id") or ""),
             "current_item_time_id": str(current_time.get("id") or ""),
             "current_live_start_at": time_attributes.get("live_start_at"),
@@ -417,12 +425,22 @@ class PlanningCenterClient:
             raise ValueError("Unknown Planning Center LIVE action")
         direct_path = str((live.get("action_paths") or {}).get(action) or "")
         if direct_path:
-            await self._post(direct_path)
+            try:
+                await self._post(direct_path)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 403:
+                    raise ValueError("Planning Center denied the LIVE action. Take control first and confirm that the token user has Services LIVE control permission.") from exc
+                raise
             return await self.live_status(plan)
         series_id, plan_id, live_id = str(live.get("series_id") or plan.get("series_id") or ""), str(plan.get("id") or ""), str(live.get("id") or "")
         if not series_id or not plan_id or not live_id:
             raise ValueError("Planning Center LIVE did not provide an action link or the series, plan, and live IDs")
-        await self._post(f"/series/{series_id}/plans/{plan_id}/live/{live_id}/{action}")
+        try:
+            await self._post(f"/series/{series_id}/plans/{plan_id}/live/{live_id}/{action}")
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 403:
+                raise ValueError("Planning Center denied the LIVE action. Take control first and confirm that the token user has Services LIVE control permission.") from exc
+            raise
         return await self.live_status({**plan, "series_id": series_id})
 
 
