@@ -494,6 +494,18 @@ def calculate_timing(plan: dict[str, Any] | None, now: datetime | None = None) -
         ]
         if live_origins:
             service_elapsed = max(0, int((now - min(live_origins)).total_seconds()))
+    service_end = parse_time(chosen_time.get("ends_at")) if chosen_time else None
+    if start and service_end is None:
+        service_end = start + timedelta(seconds=max(1, int(plan.get("planned_length") or 0)))
+    # A Services LIVE session well outside the scheduled service window is a
+    # rehearsal. A 30-minute grace period avoids labeling an early start or a
+    # slightly long service as a rehearsal.
+    in_service_window = bool(
+        start
+        and service_end
+        and start - timedelta(minutes=30) <= now <= service_end + timedelta(minutes=30)
+    )
+    rehearsal = bool(live and not in_service_window)
     return {
         "state": "running" if live or elapsed >= 0 else "upcoming",
         "current_item": current,
@@ -503,6 +515,7 @@ def calculate_timing(plan: dict[str, Any] | None, now: datetime | None = None) -
         "overall_delta": service_elapsed - planned_progress if live or elapsed >= 0 else 0,
         "service_elapsed": service_elapsed,
         "live": live,
+        "rehearsal": rehearsal,
         **timing_context,
     }
 

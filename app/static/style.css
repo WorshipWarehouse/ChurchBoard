@@ -67,3 +67,7 @@
 .part-strip .part-chip span{font-size:clamp(.54rem,1.8cqw,.68rem);line-height:1}
 .part-strip .part-chip strong{font-size:clamp(.82rem,2.7cqw,1.02rem);line-height:1.05}
 .dashboard .order-list li.active .order-marker{color:#48ff9a;text-shadow:0 0 10px #48ff9acc}
+.timing-grid.rehearsal{grid-template-rows:auto minmax(0,1fr)}
+.timing-mode{grid-column:1/-1;color:#48ff9a;font-size:clamp(.5rem,2.2cqw,.68rem);font-weight:900;letter-spacing:.12em;text-align:center;text-transform:uppercase;text-shadow:0 0 10px #48ff9a66}
+.order-list.priority-window li{height:var(--order-priority-height);padding-block:1px;overflow:hidden}
+.order-list.priority-window .order-leader,.order-list.priority-window .order-eta small{display:none}

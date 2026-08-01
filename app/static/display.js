@@ -37,7 +37,7 @@ function render(){
   const root=document.querySelector("#dashboard"),widgets=dashboard.widgets||[],existing=new Map([...root.querySelectorAll(":scope > .widget")].map(element=>[String(element.dataset.widget),element])),activeIds=new Set(),timing=lastState.timing||{};
   let changed=false;
   for(const widget of widgets){
-    const id=String(widget.id),markup=widgetMarkup(widget,lastState),renderKey=widget.type==="timing"?`timing:${String(timing.current_item?.id||"")}`:markup;
+    const id=String(widget.id),markup=widgetMarkup(widget,lastState),renderKey=widget.type==="timing"?`timing:${String(timing.current_item?.id||"")}:${timing.rehearsal===true}`:markup;
     activeIds.add(id);
     if(widgetRenderKeys.get(id)===renderKey&&existing.has(id))continue;
     const template=document.createElement("template");template.innerHTML=markup.trim();const replacement=template.content.firstElementChild,current=existing.get(id);
@@ -52,10 +52,13 @@ function render(){
 }
 function keepCurrentOrderItemVisible(root){
   root.querySelectorAll(".order-list").forEach(list=>{
-    const active=list.querySelector("li.active");if(!active)return;
-    const listRect=list.getBoundingClientRect(),activeRect=active.getBoundingClientRect(),top=activeRect.top-listRect.top+list.scrollTop,bottom=top+activeRect.height;
-    if(top<list.scrollTop)list.scrollTop=top;
-    else if(bottom>list.scrollTop+list.clientHeight)list.scrollTop=Math.max(0,bottom-list.clientHeight);
+    const rows=[...list.querySelectorAll("li")],active=list.querySelector("li.active"),activeIndex=rows.indexOf(active);if(!active||activeIndex<0)return;
+    const windowStart=Math.max(0,activeIndex-2),windowEnd=Math.min(rows.length,activeIndex+4),priorityRows=rows.slice(windowStart,windowEnd),naturalHeight=priorityRows.reduce((total,row)=>total+row.getBoundingClientRect().height,0),compact=naturalHeight>list.clientHeight;
+    list.classList.toggle("priority-window",compact);if(compact)list.style.setProperty("--order-priority-height",`${Math.max(12,Math.floor(list.clientHeight/priorityRows.length))}px`);else list.style.removeProperty("--order-priority-height");
+    const listRect=list.getBoundingClientRect(),contentTop=row=>row.getBoundingClientRect().top-listRect.top+list.scrollTop,first=rows[windowStart],thirdNext=rows[Math.min(rows.length-1,activeIndex+3)];
+    let target=contentTop(first),requiredBottom=contentTop(thirdNext)+thirdNext.getBoundingClientRect().height;
+    if(requiredBottom-target>list.clientHeight)target=Math.max(0,requiredBottom-list.clientHeight);
+    list.scrollTop=Math.max(0,target);
   });
 }
 function updateTimingWidgets(){

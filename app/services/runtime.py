@@ -9,7 +9,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
-from app.services.planning_center import PlanningCenterClient, calculate_timing, service_items
+from app.services.planning_center import PlanningCenterClient, calculate_timing, parse_time, service_items
 from app.services.propresenter import ProPresenterClient
 from app.services.shure import ShureClient
 from app.store import ConfigStore
@@ -27,6 +27,7 @@ class RuntimeService:
         self._pp_live_candidate_since = 0.0
         self._pp_live_handled = ""
         self._last_live: dict[str, Any] | None = None
+        self._rehearsal_clock: dict[str, Any] = {}
         self._propresenter_client: ProPresenterClient | None = None
         self._propresenter_key: tuple[Any, ...] | None = None
 
@@ -162,6 +163,7 @@ class RuntimeService:
             self._pp_live_candidate = ""
             self._pp_live_handled = ""
             self._last_live = None
+            self._rehearsal_clock = {}
         shure = ShureClient(config.get("shure", {}))
         shure_due = clock - self._last_refresh["shure"] >= float(config.get("shure", {}).get("refresh_seconds", 0.5))
         if shure.configured and (force or shure_due):
@@ -421,10 +423,10 @@ class RuntimeService:
         self._apply_live_timing(state, live)
         return (state.get("timing") or {}).get("source") == "planning_center_live"
 
-    @staticmethod
-    def _apply_live_timing(state: dict[str, Any], live: dict[str, Any]) -> None:
+    def _apply_live_timing(self, state: dict[str, Any], live: dict[str, Any]) -> None:
         service, current_id = state.get("service") or {}, str(live.get("current_item_id") or "")
         if not service or not current_id:
+            self._rehearsal_clock = {}
             return
         current_start = live.get("current_live_start_at")
         for item in service.get("items") or []:
@@ -440,7 +442,70 @@ class RuntimeService:
         if current_index >= 0:
             timing["current_item"] = visible_items[current_index]
             timing["next_item"] = visible_items[current_index + 1] if current_index + 1 < len(visible_items) else None
+            self._apply_rehearsal_timing(timing, service, visible_items, current_index, live)
+        elif not timing.get("rehearsal"):
+            self._rehearsal_clock = {}
         state["timing"] = {**timing, "state": "live", "source": "planning_center_live"}
+
+    def _apply_rehearsal_timing(
+        self,
+        timing: dict[str, Any],
+        service: dict[str, Any],
+        items: list[dict[str, Any]],
+        current_index: int,
+        live: dict[str, Any],
+    ) -> None:
+        if not timing.get("rehearsal"):
+            self._rehearsal_clock = {}
+            return
+        current = items[current_index]
+        current_id = str(current.get("id") or "")
+        service_id = str(service.get("id") or "")
+        clock = time.monotonic()
+        live_token = "|".join(
+            (
+                str(live.get("current_item_time_id") or ""),
+                str(live.get("current_live_start_at") or ""),
+            )
+        )
+        tracker = self._rehearsal_clock
+        same_session = tracker.get("service_id") == service_id
+        same_item = same_session and tracker.get("current_item_id") == current_id
+        same_live_token = same_item and tracker.get("live_token") == live_token
+
+        if not same_live_token:
+            seed_elapsed = 0
+            live_start = parse_time(live.get("current_live_start_at"))
+            # Planning Center can retain a LIVE timestamp from an earlier
+            # rehearsal. Only seed from it when it is recent enough to be the
+            # current run; otherwise begin a fresh local rehearsal timer.
+            if live_start:
+                age = int((datetime.now(timezone.utc) - live_start).total_seconds())
+                recent_limit = max(900, int(current.get("length") or 0) * 2)
+                if 0 <= age <= recent_limit:
+                    seed_elapsed = age
+            previous_index = int(tracker.get("current_index", -1)) if same_session else -1
+            normal_forward = same_session and not same_item and current_index == previous_index + 1
+            service_origin = float(tracker.get("service_origin", clock)) if normal_forward else clock - int(current.get("starts_after") or 0) - seed_elapsed
+            tracker = {
+                "service_id": service_id,
+                "current_item_id": current_id,
+                "current_index": current_index,
+                "live_token": live_token,
+                "item_started": clock - seed_elapsed,
+                "service_origin": service_origin,
+            }
+            self._rehearsal_clock = tracker
+
+        item_elapsed = max(0, int(clock - float(tracker.get("item_started", clock))))
+        service_elapsed = max(0, int(clock - float(tracker.get("service_origin", clock))))
+        planned_progress = int(current.get("starts_after") or 0) + min(item_elapsed, int(current.get("length") or 0))
+        timing.update({
+            "item_elapsed": item_elapsed,
+            "item_delta": item_elapsed - int(current.get("length") or 0),
+            "service_elapsed": service_elapsed,
+            "overall_delta": service_elapsed - planned_progress,
+        })
 
     async def service_control(self, action: str) -> dict[str, Any]:
         config = self.store.load()["settings"]

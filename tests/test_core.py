@@ -130,6 +130,19 @@ class PlanningCenterTests(unittest.TestCase):
         self.assertEqual(timing["item_delta"], -30)
         self.assertEqual(timing["overall_delta"], 30)
         self.assertEqual(timing["service_elapsed"], 120)
+        self.assertTrue(timing["rehearsal"])
+
+    def test_live_timing_during_service_is_not_labeled_rehearsal(self):
+        now = datetime(2030, 1, 6, 13, 45, tzinfo=timezone.utc)
+        plan = {
+            "times": [{"id": "service", "starts_at": "2030-01-06T13:30:00+00:00", "ends_at": "2030-01-06T14:30:00+00:00"}],
+            "items": [
+                {"id": "one", "title": "Opening", "length": 3600, "service_times": [{"plan_time_id": "service", "live_start_at": "2030-01-06T13:30:00+00:00", "live_end_at": None}]},
+            ],
+        }
+        timing = calculate_timing(plan, now)
+        self.assertTrue(timing["live"])
+        self.assertFalse(timing["rehearsal"])
 
     def test_position_key_is_scoped_to_team(self):
         self.assertEqual(position_key("42", "  Vox 1 "), "42::vox 1")
@@ -384,6 +397,32 @@ class RuntimeAssignmentTests(unittest.TestCase):
             self.assertTrue(runtime._apply_cached_live_timing(state))
             self.assertEqual(state["timing"]["source"], "planning_center_live")
             self.assertEqual(state["timing"]["current_item"]["id"], "two")
+
+    def test_rehearsal_clock_ignores_stale_live_times_and_tracks_forward_progress(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = RuntimeService(ConfigStore(Path(directory) / "state.json"))
+            service = {
+                "id": "plan-1",
+                "times": [{"id": "service", "starts_at": "2099-01-01T12:00:00+00:00", "ends_at": "2099-01-01T13:00:00+00:00"}],
+                "items": [
+                    {"id": "one", "title": "Welcome", "length": 60, "service_times": [{"plan_time_id": "service"}]},
+                    {"id": "two", "title": "Song", "length": 180, "service_times": [{"plan_time_id": "service"}]},
+                ],
+            }
+            state = {"service": service}
+            first = {"current_item_id": "one", "current_item_time_id": "time-one", "current_live_start_at": "2000-01-01T12:00:00+00:00"}
+            with patch("app.services.runtime.time.monotonic", return_value=1000):
+                runtime._apply_live_timing(state, first)
+            self.assertTrue(state["timing"]["rehearsal"])
+            self.assertEqual(state["timing"]["item_elapsed"], 0)
+            self.assertEqual(state["timing"]["overall_delta"], 0)
+
+            second = {"current_item_id": "two", "current_item_time_id": "time-two", "current_live_start_at": "2000-01-01T12:01:00+00:00"}
+            with patch("app.services.runtime.time.monotonic", return_value=1075):
+                runtime._apply_live_timing(state, second)
+            self.assertEqual(state["timing"]["current_item"]["id"], "two")
+            self.assertEqual(state["timing"]["item_elapsed"], 0)
+            self.assertEqual(state["timing"]["overall_delta"], 15)
 
     def test_configured_unassigned_media_titles_are_collected_per_widget(self):
         data = {"dashboards": [{"widgets": [
