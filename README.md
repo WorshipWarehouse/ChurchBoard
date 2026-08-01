@@ -72,7 +72,7 @@ Open `http://127.0.0.1:8040/admin`, turn off demonstration data, and configure P
 
 ![ChurchBoard integrations setup](docs/screenshots/setup.jpg)
 
-See [Configuration](docs/CONFIGURATION.md) for Planning Center personal-access-token setup, service selection, position and microphone mapping, ProPresenter, Services LIVE automation, dashboards, and the custom unassigned icon.
+Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Planning Center setup](docs/PLANNING_CENTER.md) and [ProPresenter setup](docs/PROPRESENTER.md) guides. They cover secure personal-access-token creation, permissions, photos, leaders, linked service playlists, the Network API, Services LIVE automation, dashboards, microphone mapping, and troubleshooting.
 
 ## Dashboard editing
 

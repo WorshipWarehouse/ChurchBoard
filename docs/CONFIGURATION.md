@@ -8,6 +8,8 @@ Open `http://127.0.0.1:8040/admin`. Keep **Use demonstration data** enabled whil
 
 ChurchBoard currently uses a Planning Center Personal Access Token.
 
+For a complete walkthrough—including a dedicated integration user, least-privilege roles, creating and protecting the token, profile photos, scheduled positions, and song/item leaders—see **[Planning Center setup](PLANNING_CENTER.md)**.
+
 1. In Planning Center, open the developer Personal Access Token page for the account ChurchBoard should use.
 2. Create a personal token and copy its **Application ID** and **Secret**.
 3. In ChurchBoard Setup, enable **Planning Center** and paste both values.
@@ -18,7 +20,7 @@ ChurchBoard currently uses a Planning Center Personal Access Token.
    - **Close hours after** determines how long a plan stays eligible.
 7. Choose **Save settings**.
 
-The token user needs access to the selected Services plans. Services LIVE automation additionally requires permission to take control and advance the selected plan.
+The token user needs access to the selected Services plans. Viewer access is a reasonable starting point for a read-only board; Services LIVE control requires Editor access, while taking control from another controller can require Administrator access. Do not grant organization-administrator access just for ChurchBoard.
 
 The service-type name and ID are saved together. If Planning Center temporarily cannot be reached, ChurchBoard retains the last saved display name instead of replacing it with a blank label.
 
@@ -53,6 +55,8 @@ The photo card and compact audio card use status borders:
 Deleting a microphone removes its receiver mapping only. It does not change Planning Center schedules.
 
 ## 4. Connect ProPresenter
+
+For the complete linked-playlist workflow, recommended Planning Center integration settings, Network API setup, production checklist, and troubleshooting, see **[ProPresenter setup](PROPRESENTER.md)**.
 
 1. In ProPresenter, enable the Network API.
 2. Note the ProPresenter computer's local IP address and API port.
