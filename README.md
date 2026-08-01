@@ -12,9 +12,8 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 
 [![Watch the ChurchBoard setup and demo video on YouTube](https://img.youtube.com/vi/pE_uWD24G2c/maxresdefault.jpg)](https://youtu.be/pE_uWD24G2c)
 
-While this repository is private, GitHub requires testers to sign in before these download links work.
 
-![Complete ChurchBoard main dashboard with color-matched liquid-glass widgets](docs/screenshots/main-dashboard-complete.jpg)
+![Complete ChurchBoard main dashboard with color-matched glass widgets](docs/screenshots/main-dashboard-complete.jpg)
 
 ## What ChurchBoard shows
 
