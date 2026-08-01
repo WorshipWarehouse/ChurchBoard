@@ -424,6 +424,34 @@ class RuntimeAssignmentTests(unittest.TestCase):
             self.assertEqual(state["timing"]["item_elapsed"], 0)
             self.assertEqual(state["timing"]["overall_delta"], 15)
 
+    def test_propresenter_target_starts_rehearsal_timing_before_live_catches_up(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = RuntimeService(ConfigStore(Path(directory) / "state.json"))
+            service = {
+                "id": "plan-1",
+                "times": [{"id": "service", "starts_at": "2099-01-01T12:00:00+00:00", "ends_at": "2099-01-01T13:00:00+00:00"}],
+                "items": [
+                    {"id": "welcome", "title": "Welcome", "length": 60, "service_times": [{"plan_time_id": "service"}]},
+                    {"id": "grace", "title": "Good Grace", "length": 360, "service_times": [{"plan_time_id": "service"}]},
+                ],
+            }
+            state = {"service": service, "timing": calculate_timing(service)}
+            with patch("app.services.runtime.time.monotonic", return_value=1000):
+                runtime._apply_provisional_rehearsal_target(
+                    state,
+                    service["items"][1],
+                    {"presentation_uuid": "pp-good-grace"},
+                )
+            self.assertEqual(state["timing"]["current_item"]["id"], "grace")
+            self.assertEqual(state["timing"]["source"], "propresenter_rehearsal")
+            self.assertTrue(state["timing"]["rehearsal"])
+            self.assertEqual(state["timing"]["item_elapsed"], 0)
+
+            stale_live = {"current_item_id": "grace", "current_item_time_id": "pco-old", "current_live_start_at": "2000-01-01T12:00:00+00:00"}
+            with patch("app.services.runtime.time.monotonic", return_value=1005):
+                runtime._apply_live_timing(state, stale_live)
+            self.assertEqual(state["timing"]["item_elapsed"], 5)
+
     def test_configured_unassigned_media_titles_are_collected_per_widget(self):
         data = {"dashboards": [{"widgets": [
             {"type": "assignments", "settings": {"use_planning_center_icon": True, "unassigned_media_title": "Alternate Logo"}},

@@ -71,3 +71,8 @@
 .timing-mode{grid-column:1/-1;color:#48ff9a;font-size:clamp(.5rem,2.2cqw,.68rem);font-weight:900;letter-spacing:.12em;text-align:center;text-transform:uppercase;text-shadow:0 0 10px #48ff9a66}
 .order-list.priority-window li{height:var(--order-priority-height);padding-block:1px;overflow:hidden}
 .order-list.priority-window .order-leader,.order-list.priority-window .order-eta small{display:none}
+.order-list li{grid-template-columns:clamp(12px,3.2cqw,21px) minmax(0,1fr) auto auto}
+.order-duration{display:grid;justify-items:end;gap:1px;white-space:nowrap}
+.order-duration strong{color:var(--text);font-size:clamp(.65rem,2.9cqw,.9rem);font-variant-numeric:tabular-nums}
+.order-duration small{color:var(--muted);font-size:clamp(.4rem,1.6cqw,.54rem);font-weight:750;letter-spacing:.04em}
+.order-list.priority-window .order-duration small{display:none}

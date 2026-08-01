@@ -6,7 +6,7 @@ import re
 import time
 import unicodedata
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.services.planning_center import PlanningCenterClient, calculate_timing, parse_time, service_items
@@ -122,6 +122,7 @@ class RuntimeService:
                     if preliminary_match:
                         fresh_presentation["planning_center_item_id"] = preliminary_match.get("id")
                         fresh_presentation["planning_center_item_title"] = preliminary_match.get("title")
+                        self._apply_provisional_rehearsal_target(next_state, preliminary_match, fresh_presentation)
                 next_state["propresenter"] = fresh_presentation
             except Exception as exc:
                 next_state["propresenter"] = {"connected": False, "error": str(exc), "current": {}, "next": {}}
@@ -423,6 +424,46 @@ class RuntimeService:
         self._apply_live_timing(state, live)
         return (state.get("timing") or {}).get("source") == "planning_center_live"
 
+    @staticmethod
+    def _outside_scheduled_service_window(state: dict[str, Any]) -> bool:
+        service, timing = state.get("service") or {}, state.get("timing") or {}
+        start = parse_time(timing.get("service_start_at") or service.get("starts_at"))
+        if not start:
+            return False
+        service_time_id = str(timing.get("service_time_id") or "")
+        chosen_time = next(
+            (row for row in service.get("times") or [] if str(row.get("id") or "") == service_time_id),
+            None,
+        )
+        end = parse_time((chosen_time or {}).get("ends_at"))
+        if end is None:
+            end = start + timedelta(seconds=max(1, int(service.get("planned_length") or 0)))
+        now = datetime.now(timezone.utc)
+        return now < start - timedelta(minutes=30) or now > end + timedelta(minutes=30)
+
+    def _apply_provisional_rehearsal_target(
+        self,
+        state: dict[str, Any],
+        target: dict[str, Any],
+        presentation: dict[str, Any],
+    ) -> None:
+        timing = state.get("timing") or {}
+        current_id = str((timing.get("current_item") or {}).get("id") or "")
+        target_id = str(target.get("id") or "")
+        if not target_id or not self._outside_scheduled_service_window(state):
+            return
+        if current_id == target_id and timing.get("rehearsal"):
+            return
+        started_at = datetime.now(timezone.utc).isoformat()
+        provisional_live = {
+            "current_item_id": target_id,
+            "current_item_time_id": f"propresenter:{presentation.get('presentation_uuid') or target_id}",
+            "current_live_start_at": started_at,
+        }
+        self._apply_live_timing(state, provisional_live)
+        if (state.get("timing") or {}).get("rehearsal"):
+            state["timing"]["source"] = "propresenter_rehearsal"
+
     def _apply_live_timing(self, state: dict[str, Any], live: dict[str, Any]) -> None:
         service, current_id = state.get("service") or {}, str(live.get("current_item_id") or "")
         if not service or not current_id:
@@ -472,6 +513,14 @@ class RuntimeService:
         same_session = tracker.get("service_id") == service_id
         same_item = same_session and tracker.get("current_item_id") == current_id
         same_live_token = same_item and tracker.get("live_token") == live_token
+
+        # The provisional ProPresenter clock is intentionally visible before
+        # Services LIVE finishes its cloud round trips. When LIVE catches up
+        # to the same item, keep that already-running local clock instead of
+        # resetting it from an older Planning Center rehearsal timestamp.
+        if same_item and not same_live_token:
+            tracker["live_token"] = live_token
+            same_live_token = True
 
         if not same_live_token:
             seed_elapsed = 0
