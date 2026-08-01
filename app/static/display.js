@@ -85,4 +85,4 @@ document.querySelector("#active-plan").addEventListener("change",async event=>{
   finally{planSelectionInFlight=false;select.disabled=false;updatePlans()}
 });
 api("/api/dashboards").then(data=>document.querySelector("#board-links").innerHTML=data.items.map(item=>`<div class="board-menu-row"><a class="board-menu-open" href="/display/${encodeURIComponent(item.slug)}">${escapeHtml(item.name)}</a><a class="board-menu-edit" href="/editor/${encodeURIComponent(item.slug)}" aria-label="Edit ${escapeHtml(item.name)}">Edit</a></div>`).join(""));
-checkServerInstance();loadBoard(); setInterval(refresh,200); setInterval(tickClocks,250);setInterval(checkServerInstance,5000);
+checkServerInstance();loadBoard(); setInterval(refresh,75); setInterval(tickClocks,250);setInterval(checkServerInstance,5000);

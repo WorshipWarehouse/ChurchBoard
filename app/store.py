@@ -50,7 +50,7 @@ def default_data() -> dict[str, Any]:
                     "refresh_seconds": 2,
                 },
             },
-            "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.2},
+            "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.075},
             "shure": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
             "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
             "manual_plan": None,

@@ -27,6 +27,8 @@ class RuntimeService:
         self._pp_live_candidate_since = 0.0
         self._pp_live_handled = ""
         self._last_live: dict[str, Any] | None = None
+        self._propresenter_client: ProPresenterClient | None = None
+        self._propresenter_key: tuple[Any, ...] | None = None
 
     async def start(self) -> None:
         self._stop.clear()
@@ -40,12 +42,15 @@ class RuntimeService:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        if self._propresenter_client is not None:
+            await self._propresenter_client.close()
+            self._propresenter_client = None
 
     async def _run(self) -> None:
         while not self._stop.is_set():
             await self.refresh()
             try:
-                await asyncio.wait_for(self._stop.wait(), 0.1)
+                await asyncio.wait_for(self._stop.wait(), 0.04)
             except asyncio.TimeoutError:
                 pass
 
@@ -70,9 +75,20 @@ class RuntimeService:
         if not live_config.get("enabled") or not self._apply_cached_live_timing(next_state):
             next_state["timing"] = calculate_timing(next_state.get("service"))
         clock = time.monotonic()
-        propresenter = ProPresenterClient(config.get("propresenter", {}))
-        configured_pp_interval = float(config.get("propresenter", {}).get("refresh_seconds", 0.2))
-        pp_interval = max(0.1, min(configured_pp_interval, 0.2))
+        propresenter_settings = config.get("propresenter", {})
+        propresenter_key = (
+            bool(propresenter_settings.get("enabled")),
+            str(propresenter_settings.get("host") or ""),
+            int(propresenter_settings.get("port") or 50001),
+        )
+        if self._propresenter_client is None or propresenter_key != self._propresenter_key:
+            if self._propresenter_client is not None:
+                await self._propresenter_client.close()
+            self._propresenter_client = ProPresenterClient(propresenter_settings)
+            self._propresenter_key = propresenter_key
+        propresenter = self._propresenter_client
+        configured_pp_interval = float(propresenter_settings.get("refresh_seconds", 0.075))
+        pp_interval = max(0.04, min(configured_pp_interval, 0.075))
         pp_due = clock - self._last_refresh["propresenter"] >= pp_interval
         if propresenter.configured and (force or pp_due):
             self._last_refresh["propresenter"] = clock

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from typing import Any
 from urllib.parse import quote
 
@@ -11,25 +12,57 @@ import httpx
 class ProPresenterClient:
     def __init__(self, settings: dict[str, Any]):
         self.settings = settings
+        self._client: httpx.AsyncClient | None = None
+        self._active_payload: dict[str, Any] = {}
+        self._playlist_payload: dict[str, Any] = {}
+        self._active_refreshed = 0.0
+        self._playlist_refreshed = 0.0
 
     @property
     def configured(self) -> bool:
         return bool(self.settings.get("enabled") and self.settings.get("host"))
 
+    def _http(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=2)
+        return self._client
+
+    async def close(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
     async def status(self) -> dict[str, Any]:
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
-        async with httpx.AsyncClient(timeout=3) as client:
-            response, active_response, index_response, playlist_response = await asyncio.gather(
-                client.get(f"{base}/v1/status/slide"),
-                client.get(f"{base}/v1/presentation/active"),
-                client.get(f"{base}/v1/presentation/slide_index"),
-                client.get(f"{base}/v1/playlist/active"),
-            )
-            response.raise_for_status()
-            slide = response.json()
-            active = active_response.json() if active_response.is_success else {}
-            index_payload = index_response.json() if index_response.is_success else 0
-            playlist_payload = playlist_response.json() if playlist_response.is_success else {}
+        clock = time.monotonic()
+        fetch_active = not self._active_payload or clock - self._active_refreshed >= 0.25
+        fetch_playlist = not self._playlist_payload or clock - self._playlist_refreshed >= 0.5
+        names = ["slide", "index"]
+        requests = [
+            self._http().get(f"{base}/v1/status/slide"),
+            self._http().get(f"{base}/v1/presentation/slide_index"),
+        ]
+        if fetch_active:
+            names.append("active")
+            requests.append(self._http().get(f"{base}/v1/presentation/active"))
+        if fetch_playlist:
+            names.append("playlist")
+            requests.append(self._http().get(f"{base}/v1/playlist/active"))
+        responses = dict(zip(names, await asyncio.gather(*requests)))
+        responses["slide"].raise_for_status()
+        slide = responses["slide"].json()
+        index_response = responses["index"]
+        index_payload = index_response.json() if index_response.is_success else 0
+        active_response = responses.get("active")
+        if active_response is not None and active_response.is_success:
+            self._active_payload = active_response.json()
+            self._active_refreshed = clock
+        playlist_response = responses.get("playlist")
+        if playlist_response is not None and playlist_response.is_success:
+            self._playlist_payload = playlist_response.json()
+            self._playlist_refreshed = clock
+        active = self._active_payload
+        playlist_payload = self._playlist_payload
         current = slide.get("current") or {}
         next_slide = slide.get("next") or {}
         index = self._index(index_payload)
@@ -68,7 +101,6 @@ class ProPresenterClient:
             **playlist_context,
             "current": current_result,
             "next": next_result,
-            "presentation": presentation,
         }
 
     @staticmethod

@@ -627,5 +627,45 @@ class ProPresenterTests(unittest.TestCase):
         self.assertEqual(ProPresenterClient._color("not-a-color"), "")
 
 
+class ProPresenterPollingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fast_poll_reuses_presentation_metadata_and_omits_raw_payload(self):
+        class FakeResponse:
+            def __init__(self, payload):
+                self.payload = payload
+                self.is_success = True
+
+            def json(self):
+                return self.payload
+
+            def raise_for_status(self):
+                return None
+
+        class FakeHttp:
+            def __init__(self):
+                self.calls = []
+
+            async def get(self, url):
+                self.calls.append(url)
+                if url.endswith("/v1/status/slide"):
+                    return FakeResponse({"current": {"text": "Current"}, "next": {"text": "Next"}})
+                if url.endswith("/v1/presentation/slide_index"):
+                    return FakeResponse(0)
+                if url.endswith("/v1/presentation/active"):
+                    return FakeResponse({"presentation": {"id": {"uuid": "PP-1", "name": "Song"}, "groups": [{"name": "Verse", "slides": [{"text": "Current"}, {"text": "Next"}]}]}})
+                return FakeResponse({"presentation": {"playlist": {"name": "Plan"}, "item": {"name": "Song", "index": 0}, "playlist_item": {"is_pco": True}}})
+
+        client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 50001})
+        fake_http = FakeHttp()
+        client._client = fake_http
+        first = await client.status()
+        second = await client.status()
+        self.assertNotIn("presentation", first)
+        self.assertEqual(second["current"]["part"], "Verse")
+        self.assertEqual(sum(url.endswith("/v1/status/slide") for url in fake_http.calls), 2)
+        self.assertEqual(sum(url.endswith("/v1/presentation/slide_index") for url in fake_http.calls), 2)
+        self.assertEqual(sum(url.endswith("/v1/presentation/active") for url in fake_http.calls), 1)
+        self.assertEqual(sum(url.endswith("/v1/playlist/active") for url in fake_http.calls), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
