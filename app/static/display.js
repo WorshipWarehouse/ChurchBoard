@@ -47,8 +47,16 @@ function render(){
   for(const [id,element] of existing){if(!activeIds.has(id)){element.remove();widgetRenderKeys.delete(id);changed=true}}
   if(!widgets.length&&root.innerHTML!==`<div class="empty">This dashboard has no widgets.</div>`){root.innerHTML=`<div class="empty">This dashboard has no widgets.</div>`;changed=true}
   updateTimingWidgets();tickClocks();
-  if(changed)enhanceDynamicContent(root);
+  if(changed){enhanceDynamicContent(root);keepCurrentOrderItemVisible(root)}
   maybeAutoStartSpl();
+}
+function keepCurrentOrderItemVisible(root){
+  root.querySelectorAll(".order-list").forEach(list=>{
+    const active=list.querySelector("li.active");if(!active)return;
+    const listRect=list.getBoundingClientRect(),activeRect=active.getBoundingClientRect(),top=activeRect.top-listRect.top+list.scrollTop,bottom=top+activeRect.height;
+    if(top<list.scrollTop)list.scrollTop=top;
+    else if(bottom>list.scrollTop+list.clientHeight)list.scrollTop=Math.max(0,bottom-list.clientHeight);
+  });
 }
 function updateTimingWidgets(){
   const timing=lastState.timing||{},item=timing.current_item,cells=document.querySelectorAll('[data-widget-type="timing"] .timing-cell');

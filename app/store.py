@@ -47,7 +47,7 @@ def default_data() -> dict[str, Any]:
                     "allow_previous": False,
                     "match_mode": "exact",
                     "stable_seconds": 2,
-                    "refresh_seconds": 2,
+                    "refresh_seconds": 0.5,
                 },
             },
             "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.075},

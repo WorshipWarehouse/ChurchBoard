@@ -485,6 +485,44 @@ class ProPresenterLiveSyncTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(state["planning_center_live"]["state"], "synced")
             self.assertEqual(state["timing"]["current_item"]["id"], "2")
 
+    async def test_linked_pco_item_continuously_corrects_live_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = RuntimeService(ConfigStore(Path(directory) / "state.json"))
+            state = {
+                "service": {"id": "plan", "service_type_id": "type", "starts_at": "2030-01-01T12:00:00+00:00", "items": [
+                    {"id": "1", "title": "Good Grace", "item_type": "song", "length": 120, "starts_after": 0},
+                    {"id": "2", "title": "Welcome", "item_type": "item", "length": 60, "starts_after": 120},
+                ]},
+                "propresenter": {"connected": True, "title": "Good Grace", "service_item_title": "Good Grace", "service_item_index": 0, "service_item_is_pco": True, "presentation_uuid": "pp-good-grace"},
+                "timing": {"current_item": {"id": "1"}},
+            }
+
+            class DriftClient:
+                configured = True
+
+                def __init__(self):
+                    self.current = "1"
+                    self.actions = []
+
+                async def live_status(self, _plan, create=False):
+                    return {"id": "live", "can_control": True, "can_take_control": True, "has_control": True, "current_item_id": self.current}
+
+                async def live_action(self, _plan, _live, action):
+                    self.actions.append(action)
+                    if action == "go_to_previous_item":
+                        self.current = "1"
+                    return await self.live_status(_plan)
+
+            client = DriftClient()
+            settings = {"enabled": True, "auto_take_control": True, "songs_only": True, "allow_previous": False, "match_mode": "exact", "stable_seconds": 0, "refresh_seconds": 2}
+            await runtime._sync_propresenter_live(state, client, settings, 10)
+            await runtime._sync_propresenter_live(state, client, settings, 10.1)
+            client.current = "2"
+            await runtime._sync_propresenter_live(state, client, settings, 10.7)
+            self.assertEqual(client.actions, ["go_to_previous_item"])
+            self.assertEqual(state["planning_center_live"]["state"], "synced")
+            self.assertEqual(state["timing"]["current_item"]["id"], "1")
+
     async def test_same_presentation_retries_after_live_action_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = RuntimeService(ConfigStore(Path(directory) / "state.json"))
@@ -665,6 +703,22 @@ class ProPresenterTests(unittest.TestCase):
         self.assertEqual([entry["part"] for entry in entries], ["Verse 1", "Verse 1", "Chorus"])
         self.assertEqual(entries[0]["color"], "rgba(255, 51, 26, 1)")
         self.assertEqual(entries[2]["color"], "rgba(51, 204, 102, 1)")
+
+    def test_active_arrangement_repeats_groups_in_live_order(self):
+        presentation = {
+            "groups": [
+                {"uuid": "blank", "name": "Blank", "slides": [{"label": "Background.mp4", "text": ""}]},
+                {"uuid": "chorus", "name": "Chorus 1", "slides": [{"text": "Chorus line"}]},
+                {"uuid": "verse", "name": "Verse 2", "slides": [{"text": "Verse first"}, {"text": "Verse last"}]},
+                {"uuid": "bridge", "name": "Bridge", "slides": [{"text": "Bridge line"}]},
+            ],
+            "arrangements": [{"id": {"uuid": "arrangement", "index": 0}, "groups": ["verse", "chorus", "bridge"], "total_cues": 4}],
+        }
+        entries = ProPresenterClient._presentation_cue_entries(presentation)
+        self.assertEqual([entry["part"] for entry in entries], ["Blank", "Verse 2", "Verse 2", "Chorus 1", "Bridge"])
+        current, next_position = ProPresenterClient._cue_positions(entries, {"text": "Verse last"}, {"text": "Chorus line"}, 1)
+        self.assertEqual((current, next_position), (2, 3))
+        self.assertEqual(ProPresenterClient._cue_total({"presentation_index": {"total_cues": 4}}, len(entries)), 4)
 
     def test_nested_live_presentation_index_is_read(self):
         payload = {"presentation_index": {"index": 4, "presentation_id": {"uuid": "ABC-123"}}}

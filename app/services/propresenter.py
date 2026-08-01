@@ -67,7 +67,8 @@ class ProPresenterClient:
         next_slide = slide.get("next") or {}
         index = self._index(index_payload)
         presentation = active.get("presentation", active)
-        cue_entries = self._cue_entries(presentation)
+        cue_entries = self._presentation_cue_entries(presentation)
+        cue_total = self._cue_total(index_payload, len(cue_entries))
         current_position, next_position = self._cue_positions(cue_entries, current, next_slide, index)
         current_entry = cue_entries[current_position] if 0 <= current_position < len(cue_entries) else {}
         next_entry = cue_entries[next_position] if 0 <= next_position < len(cue_entries) else {}
@@ -83,15 +84,15 @@ class ProPresenterClient:
             "part": current_entry.get("part", ""),
             "color": current_entry.get("color", ""),
             "index": index + 1,
-            "total": len(cue_entries),
+            "total": cue_total,
             "image_url": self._thumbnail_url(presentation_uuid, current_position, current_result["image_uuid"])
             if current_result["image_uuid"] or current_details else "",
         })
         next_result.update({
             "part": next_entry.get("part", ""),
             "color": next_entry.get("color", ""),
-            "index": index + 2 if index + 1 < len(cue_entries) else 0,
-            "total": len(cue_entries),
+            "index": index + 2 if index + 1 < cue_total else 0,
+            "total": cue_total,
             "image_url": self._thumbnail_url(presentation_uuid, next_position, next_result["image_uuid"])
             if next_result["image_uuid"] or next_details else "",
         })
@@ -155,6 +156,84 @@ class ProPresenterClient:
                         except (TypeError, ValueError):
                             pass
         return 0
+
+    @classmethod
+    def _cue_total(cls, raw: Any, fallback: int) -> int:
+        if isinstance(raw, dict):
+            try:
+                total = int(raw.get("total_cues") or 0)
+                if total > 0:
+                    return total
+            except (TypeError, ValueError):
+                pass
+            for key in ("presentation_index", "presentation"):
+                nested = raw.get(key)
+                if isinstance(nested, dict):
+                    total = cls._cue_total(nested, 0)
+                    if total > 0:
+                        return total
+        return max(0, fallback)
+
+    @classmethod
+    def _presentation_cue_entries(cls, raw: Any) -> list[dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return []
+        groups = raw.get("groups") or []
+        arrangements = raw.get("arrangements") or []
+        if isinstance(groups, dict):
+            groups = list(groups.values())
+        if not isinstance(groups, list) or not isinstance(arrangements, list) or not arrangements:
+            return cls._cue_entries(raw)
+
+        def identifier(value: Any) -> str:
+            if isinstance(value, str):
+                return value
+            if isinstance(value, dict):
+                direct = value.get("uuid")
+                if isinstance(direct, str):
+                    return direct
+                return identifier(value.get("id"))
+            return ""
+
+        current = raw.get("current_arrangement")
+        current_id = identifier(current)
+        current_name = cls._presentation_title(current) if isinstance(current, dict) else str(current or "").strip()
+        arrangement = next((row for row in arrangements if isinstance(row, dict) and current_id and identifier(row.get("id")) == current_id), None)
+        if arrangement is None and current_name:
+            arrangement = next((row for row in arrangements if isinstance(row, dict) and cls._presentation_title(row.get("id")) == current_name), None)
+        if arrangement is None:
+            def arrangement_order(row: dict[str, Any]) -> int:
+                try:
+                    return int((row.get("id") or {}).get("index") or 0) if isinstance(row.get("id"), dict) else 0
+                except (TypeError, ValueError):
+                    return 0
+
+            arrangement = min(
+                (row for row in arrangements if isinstance(row, dict)),
+                key=arrangement_order,
+                default=None,
+            )
+        sequence = arrangement.get("groups") if isinstance(arrangement, dict) else None
+        if not isinstance(sequence, list) or not sequence:
+            return cls._cue_entries(raw)
+
+        group_map = {identifier(group): group for group in groups if isinstance(group, dict) and identifier(group)}
+        sequence_ids = [identifier(value) for value in sequence]
+        sequence_ids = [value for value in sequence_ids if value in group_map]
+        if not sequence_ids:
+            return cls._cue_entries(raw)
+
+        referenced = set(sequence_ids)
+        first_arranged = next((index for index, group in enumerate(groups) if identifier(group) in referenced), 0)
+        entries: list[dict[str, Any]] = []
+        # Thumbnail indexes include leading media/background cues even though
+        # presentation_index and the active arrangement do not.
+        for group in groups[:first_arranged]:
+            if isinstance(group, dict):
+                entries.extend(cls._cue_entries(group))
+        for group_id in sequence_ids:
+            entries.extend(cls._cue_entries(group_map[group_id]))
+        return entries
 
     @classmethod
     def _cue_positions(

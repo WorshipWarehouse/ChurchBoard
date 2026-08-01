@@ -187,7 +187,9 @@ class RuntimeService:
             state["planning_center_live"] = base_status
             return
 
-        poll_due = clock - self._last_refresh["planning_center_live"] >= float(settings.get("refresh_seconds", 2))
+        configured_live_interval = float(settings.get("refresh_seconds", 0.5))
+        live_interval = max(0.25, min(configured_live_interval, 0.5))
+        poll_due = clock - self._last_refresh["planning_center_live"] >= live_interval
         live = None
         if force or poll_due:
             self._last_refresh["planning_center_live"] = clock
@@ -201,6 +203,8 @@ class RuntimeService:
                     self._last_live = None
             except Exception as exc:
                 state["planning_center_live"] = {**base_status, "state": "error", "message": f"Services LIVE status failed: {exc}"}
+        elif str((self._last_live or {}).get("_service_id") or "") == str(service.get("id") or ""):
+            live = self._last_live
 
         title = str(presentation.get("title") or "").strip()
         service_item_title = str(presentation.get("service_item_title") or "").strip()
@@ -225,7 +229,9 @@ class RuntimeService:
         if clock - self._pp_live_candidate_since < stable_seconds:
             state["planning_center_live"] = {**base_status, "state": "stabilizing", "presentation_title": title, "service_item_title": service_item_title, "message": f"Waiting for “{match_title}” to remain active"}
             return
-        if signature == self._pp_live_handled:
+        already_handled = signature == self._pp_live_handled
+        if already_handled and str((live or {}).get("current_item_id") or "") == str((target or {}).get("id") or ""):
+            state["planning_center_live"] = {**self._live_status_payload(live), "state": "synced", "presentation_title": title, "service_item_title": service_item_title, "target_item_id": target.get("id"), "target_item_title": target.get("title"), "message": f"Following {target.get('title')} from ProPresenter"}
             return
         if not target:
             self._pp_live_handled = signature
@@ -260,7 +266,8 @@ class RuntimeService:
                 difference = target_index + 1 if next_index < 0 else target_index - next_index + 1
             else:
                 difference = target_index - current_index
-            if difference < 0 and not settings.get("allow_previous", False):
+            linked_pco_item = bool(is_pco_item and service_item_title)
+            if difference < 0 and not settings.get("allow_previous", False) and not linked_pco_item:
                 self._pp_live_handled = signature
                 state["planning_center_live"] = {**self._live_status_payload(live), "state": "behind", "presentation_title": title, "target_item_id": target.get("id"), "target_item_title": target.get("title"), "message": f"“{title}” is behind the current LIVE item; backward movement is disabled"}
                 return
