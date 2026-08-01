@@ -2,6 +2,8 @@
   <img src="app/static/churchboard-logo.png" alt="ChurchBoard wooden church announcement board logo" width="190">
 </p>
 
+![Complete ChurchBoard main dashboard with color-matched glass widgets](docs/screenshots/main-dashboard-complete.jpg)
+
 <h1 align="center">ChurchBoard</h1>
 
 ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, and Shure QLX-D/ULX-D microphone telemetry in configurable displays for the stage, green room, audio booth, and production team.
@@ -12,8 +14,6 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 
 [![Watch the ChurchBoard setup and demo video on YouTube](https://img.youtube.com/vi/pE_uWD24G2c/maxresdefault.jpg)](https://youtu.be/pE_uWD24G2c)
 
-
-![Complete ChurchBoard main dashboard with color-matched glass widgets](docs/screenshots/main-dashboard-complete.jpg)
 
 ## What ChurchBoard shows
 
