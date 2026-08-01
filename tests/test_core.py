@@ -655,6 +655,30 @@ class ProPresenterTests(unittest.TestCase):
         )
         self.assertEqual(match["id"], "2")
 
+    def test_pco_playlist_index_ignores_headers_and_pre_service_rows(self):
+        items = [
+            {"id": "pre", "title": "Pre-Service", "item_type": "header"},
+            {"id": "countdown", "title": "Countdown", "item_type": "item"},
+            {"id": "service", "title": "Service", "item_type": "header"},
+            {"id": "great", "title": "Great I Am", "item_type": "song", "service_times": [{"exclude": True}]},
+            {"id": "center", "title": "Center", "item_type": "song"},
+            {"id": "grace", "title": "Good Grace", "item_type": "song"},
+            {"id": "welcome", "title": "Welcome / Host Moment", "item_type": "item"},
+            {"id": "message", "title": "Message", "item_type": "item"},
+            {"id": "fire", "title": "Another In The Fire", "item_type": "song"},
+            {"id": "dismissal", "title": "Dismissal", "item_type": "item"},
+        ]
+        match = RuntimeService._match_presentation_item(
+            "John 1_1-3 (ASB)",
+            items,
+            "center",
+            {"songs_only": True, "match_mode": "exact"},
+            service_item_title="John 1_1-3 (ASB)",
+            service_item_index=4,
+            is_pco_item=True,
+        )
+        self.assertEqual(match["id"], "message")
+
     def test_strong_title_fallback_can_match_a_non_song_item(self):
         items = [
             {"id": "1", "title": "Good Grace", "item_type": "song"},

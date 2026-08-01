@@ -323,13 +323,59 @@ class RuntimeService:
         return max(scores, default=0.0)
 
     @classmethod
+    def _pco_playlist_items(cls, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return the plan rows that occupy indexes in a PCO ProPresenter playlist.
+
+        ProPresenter omits Planning Center headers and the pre-service rows that
+        precede the main service section. Planning Center's API still returns
+        both, so indexing directly into ``plan.items`` can point several rows
+        early (for example Message resolving to Center).
+
+        Items excluded from a particular service time intentionally remain in
+        this list because ProPresenter's synced playlist can still contain
+        them; service-time exclusions are applied later when rendering timing.
+        """
+        first_song_index = next(
+            (
+                index
+                for index, item in enumerate(items)
+                if str(item.get("item_type") or "").casefold() == "song"
+            ),
+            None,
+        )
+        start_index = 0
+        if first_song_index is not None:
+            leading_headers = [
+                index
+                for index, item in enumerate(items[:first_song_index])
+                if str(item.get("item_type") or "").casefold() == "header"
+            ]
+            if leading_headers:
+                start_index = leading_headers[-1] + 1
+        else:
+            service_headers = [
+                index
+                for index, item in enumerate(items)
+                if str(item.get("item_type") or "").casefold() == "header"
+                and cls._normalize_title(item.get("title") or "") in {"service", "main service", "worship service"}
+            ]
+            if service_headers:
+                start_index = service_headers[-1] + 1
+        return [
+            item
+            for item in items[start_index:]
+            if str(item.get("item_type") or "").casefold() != "header"
+        ]
+
+    @classmethod
     def _match_presentation_item(cls, title: str, items: list[dict[str, Any]], current_item_id: str, settings: dict[str, Any], *, service_item_title: str = "", service_item_index: int | None = None, is_pco_item: bool = False) -> dict[str, Any] | None:
         candidates = list(items)
         song_candidates = [item for item in candidates if str(item.get("item_type") or "").casefold() == "song"]
         preferred = candidates if is_pco_item or not settings.get("songs_only", True) else song_candidates
         source_title = service_item_title if is_pco_item and service_item_title else title
         matches = [item for item in preferred if cls._title_score(source_title, item.get("title") or "") == 1]
-        indexed_item = items[service_item_index] if is_pco_item and isinstance(service_item_index, int) and 0 <= service_item_index < len(items) else None
+        playlist_items = cls._pco_playlist_items(items) if is_pco_item else []
+        indexed_item = playlist_items[service_item_index] if isinstance(service_item_index, int) and 0 <= service_item_index < len(playlist_items) else None
         if matches:
             # The ProPresenter playlist omits some Planning Center rows (for
             # example headers and countdowns), so its index is not necessarily
