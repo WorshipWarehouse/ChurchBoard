@@ -1,5 +1,7 @@
 # Configuring ChurchBoard
 
+For a guided walkthrough, watch the **[ChurchBoard setup and demo video](https://youtu.be/pE_uWD24G2c)**.
+
 Open `http://127.0.0.1:8040/admin`. Keep **Use demonstration data** enabled while learning the editor, then disable it before connecting production systems.
 
 ![ChurchBoard setup page](screenshots/setup.jpg)
