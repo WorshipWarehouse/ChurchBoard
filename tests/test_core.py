@@ -445,6 +445,46 @@ class ProPresenterLiveSyncTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(state["timing"]["current_item"]["id"], "3")
             self.assertEqual(state["timing"]["source"], "planning_center_live")
 
+    async def test_empty_live_session_advances_from_before_first_item(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = RuntimeService(ConfigStore(Path(directory) / "state.json"))
+            state = {
+                "service": {"id": "plan", "service_type_id": "type", "starts_at": "2030-01-01T12:00:00+00:00", "items": [
+                    {"id": "1", "title": "Welcome", "item_type": "item", "length": 60, "starts_after": 0},
+                    {"id": "2", "title": "Song", "item_type": "song", "length": 120, "starts_after": 60},
+                ]},
+                "propresenter": {"connected": True, "title": "Song", "presentation_uuid": "pp-song"},
+                "timing": {"current_item": {"id": "1"}},
+            }
+
+            class EmptyLiveClient:
+                configured = True
+
+                def __init__(self):
+                    self.actions = []
+                    self.position = -1
+                    self.control = False
+
+                async def live_status(self, _plan, create=False):
+                    current = str(self.position + 1) if self.position >= 0 else ""
+                    return {"id": "live", "can_control": True, "can_take_control": True, "has_control": self.control, "current_item_id": current, "next_item_id": ""}
+
+                async def live_action(self, _plan, _live, action):
+                    self.actions.append(action)
+                    if action == "toggle_control":
+                        self.control = True
+                    elif action == "go_to_next_item":
+                        self.position += 1
+                    return await self.live_status(_plan)
+
+            client = EmptyLiveClient()
+            settings = {"enabled": True, "auto_take_control": True, "songs_only": True, "allow_previous": False, "match_mode": "exact", "stable_seconds": 0, "refresh_seconds": 2}
+            await runtime._sync_propresenter_live(state, client, settings, 10)
+            await runtime._sync_propresenter_live(state, client, settings, 10.1)
+            self.assertEqual(client.actions, ["toggle_control", "go_to_next_item", "go_to_next_item"])
+            self.assertEqual(state["planning_center_live"]["state"], "synced")
+            self.assertEqual(state["timing"]["current_item"]["id"], "2")
+
     async def test_same_presentation_retries_after_live_action_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = RuntimeService(ConfigStore(Path(directory) / "state.json"))
@@ -542,6 +582,24 @@ class ProPresenterTests(unittest.TestCase):
             is_pco_item=True,
         )
         self.assertEqual(match["id"], "3")
+
+    def test_pco_exact_title_beats_playlist_index_shifted_by_plan_headers(self):
+        items = [
+            {"id": "header", "title": "Service", "item_type": "header"},
+            {"id": "good-grace", "title": "Good Grace", "item_type": "song"},
+            {"id": "welcome", "title": "Welcome", "item_type": "item"},
+            {"id": "another", "title": "Another In The Fire", "item_type": "song"},
+        ]
+        match = RuntimeService._match_presentation_item(
+            "Another In The Fire",
+            items,
+            "header",
+            {"songs_only": True, "match_mode": "exact"},
+            service_item_title="Another In The Fire",
+            service_item_index=1,
+            is_pco_item=True,
+        )
+        self.assertEqual(match["id"], "another")
 
     def test_pco_playlist_index_matches_message_despite_scripture_filename(self):
         items = [
@@ -651,7 +709,10 @@ class ProPresenterPollingTests(unittest.IsolatedAsyncioTestCase):
                 if url.endswith("/v1/presentation/slide_index"):
                     return FakeResponse(0)
                 if url.endswith("/v1/presentation/active"):
-                    return FakeResponse({"presentation": {"id": {"uuid": "PP-1", "name": "Song"}, "groups": [{"name": "Verse", "slides": [{"text": "Current"}, {"text": "Next"}]}]}})
+                    return FakeResponse({"presentation": {"id": {"uuid": "PP-1", "name": "Song"}, "groups": [
+                        {"name": "", "slides": [{"text": "", "label": "Background.mp4"}]},
+                        {"name": "Verse", "slides": [{"text": "Current"}, {"text": "Next"}]},
+                    ]}})
                 return FakeResponse({"presentation": {"playlist": {"name": "Plan"}, "item": {"name": "Song", "index": 0}, "playlist_item": {"is_pco": True}}})
 
         client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 50001})
@@ -661,6 +722,8 @@ class ProPresenterPollingTests(unittest.IsolatedAsyncioTestCase):
         second = await client.status()
         self.assertNotIn("presentation", first)
         self.assertEqual(second["current"]["part"], "Verse")
+        self.assertEqual(second["current"]["image_url"], "/api/integrations/propresenter/thumbnail/PP-1/1")
+        self.assertEqual(second["next"]["image_url"], "/api/integrations/propresenter/thumbnail/PP-1/2")
         self.assertEqual(sum(url.endswith("/v1/status/slide") for url in fake_http.calls), 2)
         self.assertEqual(sum(url.endswith("/v1/presentation/slide_index") for url in fake_http.calls), 2)
         self.assertEqual(sum(url.endswith("/v1/presentation/active") for url in fake_http.calls), 1)

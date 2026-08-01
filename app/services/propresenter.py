@@ -68,8 +68,9 @@ class ProPresenterClient:
         index = self._index(index_payload)
         presentation = active.get("presentation", active)
         cue_entries = self._cue_entries(presentation)
-        current_entry = cue_entries[index] if 0 <= index < len(cue_entries) else {}
-        next_entry = cue_entries[index + 1] if 0 <= index + 1 < len(cue_entries) else {}
+        current_position, next_position = self._cue_positions(cue_entries, current, next_slide, index)
+        current_entry = cue_entries[current_position] if 0 <= current_position < len(cue_entries) else {}
+        next_entry = cue_entries[next_position] if 0 <= next_position < len(cue_entries) else {}
         current_details = current_entry.get("cue", {})
         next_details = next_entry.get("cue", {})
         current_result = self._slide(current)
@@ -83,7 +84,7 @@ class ProPresenterClient:
             "color": current_entry.get("color", ""),
             "index": index + 1,
             "total": len(cue_entries),
-            "image_url": self._thumbnail_url(presentation_uuid, index, current_result["image_uuid"])
+            "image_url": self._thumbnail_url(presentation_uuid, current_position, current_result["image_uuid"])
             if current_result["image_uuid"] or current_details else "",
         })
         next_result.update({
@@ -91,7 +92,7 @@ class ProPresenterClient:
             "color": next_entry.get("color", ""),
             "index": index + 2 if index + 1 < len(cue_entries) else 0,
             "total": len(cue_entries),
-            "image_url": self._thumbnail_url(presentation_uuid, index + 1, next_result["image_uuid"])
+            "image_url": self._thumbnail_url(presentation_uuid, next_position, next_result["image_uuid"])
             if next_result["image_uuid"] or next_details else "",
         })
         return {
@@ -154,6 +155,38 @@ class ProPresenterClient:
                         except (TypeError, ValueError):
                             pass
         return 0
+
+    @classmethod
+    def _cue_positions(
+        cls,
+        entries: list[dict[str, Any]],
+        current: Any,
+        next_slide: Any,
+        reported_index: int,
+    ) -> tuple[int, int]:
+        def identity(raw: Any) -> str:
+            slide = cls._slide(raw)
+            return " ".join(str(slide.get("text") or "").casefold().split())
+
+        def resolve(raw: Any, fallback: int, minimum: int = 0) -> tuple[int, bool]:
+            wanted = identity(raw)
+            if wanted:
+                candidates = [
+                    position
+                    for position, entry in enumerate(entries)
+                    if position >= minimum and identity(entry.get("cue")) == wanted
+                ]
+                if candidates:
+                    return min(candidates, key=lambda position: (abs(position - fallback), position < fallback, position)), True
+            return fallback, False
+
+        current_position, current_matched = resolve(current, reported_index)
+        next_position, next_matched = resolve(next_slide, current_position + 1, current_position + 1)
+        if not current_matched and next_matched:
+            current_position = max(0, next_position - 1)
+        if current_matched and not next_matched:
+            next_position = current_position + 1
+        return current_position, next_position
 
     @classmethod
     def _cues(cls, raw: Any) -> list[dict[str, Any]]:

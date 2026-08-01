@@ -254,9 +254,10 @@ class RuntimeService:
                 raise ValueError("The matching item is not in the active Planning Center plan")
             if current_index < 0:
                 next_index = next((index for index, item in enumerate(items) if str(item.get("id")) == str(live.get("next_item_id"))), -1)
-                if next_index < 0:
-                    raise ValueError("Services LIVE did not report a current or next item")
-                difference = target_index - next_index + 1
+                # A newly opened Services LIVE session can be positioned
+                # before the first plan item, with neither current nor next
+                # populated. Advance from that pre-start position.
+                difference = target_index + 1 if next_index < 0 else target_index - next_index + 1
             else:
                 difference = target_index - current_index
             if difference < 0 and not settings.get("allow_previous", False):
@@ -322,6 +323,14 @@ class RuntimeService:
         source_title = service_item_title if is_pco_item and service_item_title else title
         matches = [item for item in preferred if cls._title_score(source_title, item.get("title") or "") == 1]
         indexed_item = items[service_item_index] if is_pco_item and isinstance(service_item_index, int) and 0 <= service_item_index < len(items) else None
+        if matches:
+            # The ProPresenter playlist omits some Planning Center rows (for
+            # example headers and countdowns), so its index is not necessarily
+            # an index into the complete plan. An exact linked item title is
+            # the stronger signal.
+            current_index = next((index for index, item in enumerate(items) if str(item.get("id")) == str(current_item_id)), 0)
+            indexed_matches = [(index, item) for index, item in enumerate(items) if item in matches]
+            return min(indexed_matches, key=lambda pair: (pair[0] < current_index, abs(pair[0] - current_index)))[1]
         if indexed_item:
             # ProPresenter's is_pco flag means this playlist was created from
             # the Planning Center plan. Its playlist index remains linked to
