@@ -28,19 +28,29 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/", follow_redirects=False).headers["location"], "/desktop")
         admin = self.client.get("/admin")
         self.assertEqual(admin.status_code, 200)
+        self.assertIn("churchboard-icon.png", admin.text)
         self.assertIn('select name="timezone"', admin.text)
         self.assertNotIn('input name="timezone"', admin.text)
         display = self.client.get("/display/main")
         self.assertEqual(display.status_code, 200)
+        self.assertIn('class="menu-brand"', display.text)
         self.assertEqual(display.headers["cache-control"], "no-store")
         editor = self.client.get("/editor/main")
         self.assertEqual(editor.status_code, 200)
+        self.assertIn("churchboard-icon.png", editor.text)
         self.assertIn('id="dashboard-background-color" type="color"', editor.text)
         self.assertNotIn('id="dashboard-theme"', editor.text)
         self.assertNotIn('target="_blank"', editor.text)
         display_script = self.client.get("/static/display.js").text
         self.assertIn('class="board-menu-edit"', display_script)
         self.assertIn('/editor/${encodeURIComponent(item.slug)}', display_script)
+        common_script = self.client.get("/static/common.js").text
+        self.assertIn('class="unassigned-board-icon"', common_script)
+        stylesheet = self.client.get("/static/style.css").text
+        self.assertIn('mask:url("/static/churchboard-mark.svg")', stylesheet)
+        mark = self.client.get("/static/churchboard-mark.svg")
+        self.assertEqual(mark.status_code, 200)
+        self.assertIn("<svg", mark.text)
         self.assertTrue(self.client.get("/api/app-info").json()["instance_id"])
 
     def test_desktop_control_lists_boards_and_requires_tray_to_quit(self):
