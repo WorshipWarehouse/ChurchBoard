@@ -97,7 +97,7 @@ Add a **Team members** widget, select Planning Center teams/categories, then cho
 
 ## 8. Use a custom unassigned icon
 
-A Scheduled Positions & Mics widget can replace the default `U` placeholder with media stored in the active Planning Center plan.
+A Scheduled Positions & Mics widget uses a one-color ChurchBoard mark for an unassigned position by default. It can replace that mark with media stored in the active Planning Center plan.
 
 1. Add a PNG or JPEG as a Planning Center plan media item.
 2. Give the media item a recognizable title, such as `Icon`.
@@ -111,7 +111,7 @@ The title is configurable per widget, so different dashboards can use different 
 
 Add an **Audio / SPL meter** widget and set the green, orange, and red thresholds. Choose **Enable microphone** from the display and grant the browser microphone permission. The permission button remains available at the widget's smallest size.
 
-Browser microphone readings are useful as a production reference but are not a substitute for a calibrated, standards-compliant SPL meter. Calibration varies by computer, interface, browser, and microphone.
+Browser microphone readings are useful as a production reference but are not a substitute for a calibrated, standards-compliant SPL meter or noise dosimeter and must not be used for regulatory compliance. Calibration varies by computer, interface, browser, and microphone. See [legal and operational limitations](../LEGAL.md).
 
 ## 10. Open displays
 

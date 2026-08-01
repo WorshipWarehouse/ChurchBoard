@@ -85,6 +85,11 @@ class ApiTests(unittest.TestCase):
     def test_runtime_and_manual_service_selection(self):
         runtime = self.client.get("/api/runtime").json()
         self.assertEqual(runtime["service"]["id"], "demo")
+        self.assertTrue(all(person["photo"].startswith("/static/demo-people/") for person in runtime["people"]))
+        for filename in ("jordan-lee.jpg", "morgan-reed.jpg", "taylor-brooks.jpg"):
+            photo = self.client.get(f"/static/demo-people/{filename}")
+            self.assertEqual(photo.status_code, 200)
+            self.assertEqual(photo.headers["content-type"], "image/jpeg")
         response = self.client.put("/api/active-plan", json={"id": "demo", "service_type_id": "demo"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["manual_plan"]["id"], "demo")

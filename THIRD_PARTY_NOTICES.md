@@ -1,0 +1,27 @@
+# Third-party notices
+
+ChurchBoard depends on open-source software. Each dependency remains governed by its own license. Release builds run `packaging/collect_licenses.py` after installing dependencies and include the exact available license and notice files for the versions shipped in that build.
+
+Core runtime components include:
+
+| Component | License | Project |
+| --- | --- | --- |
+| FastAPI | MIT | https://github.com/fastapi/fastapi |
+| Starlette | BSD-3-Clause | https://github.com/Kludex/starlette |
+| Pydantic and pydantic-core | MIT | https://github.com/pydantic/pydantic |
+| HTTPX and HTTPCore | BSD-3-Clause | https://github.com/encode/httpx |
+| Uvicorn | BSD-3-Clause | https://github.com/Kludex/uvicorn |
+| Pillow | MIT-CMU | https://python-pillow.github.io/ |
+| pystray | LGPL-3.0 | https://github.com/moses-palmer/pystray |
+| AnyIO | MIT | https://github.com/agronholm/anyio |
+| Click | BSD-3-Clause | https://github.com/pallets/click |
+| h11 | MIT | https://github.com/python-hyper/h11 |
+| httptools | MIT and bundled upstream licenses | https://github.com/MagicStack/httptools |
+| watchfiles | MIT | https://github.com/samuelcolvin/watchfiles |
+| websockets | BSD-3-Clause | https://github.com/python-websockets/websockets |
+| python-dotenv | BSD-3-Clause | https://github.com/theskumar/python-dotenv |
+| PyYAML | MIT | https://pyyaml.org/ |
+
+Build and packaging tools include PyInstaller (GPL-2.0-or-later with its exception for distributing bundled applications), dmgbuild (MIT), and Inno Setup under its own license. These tools do not change ChurchBoard's MIT license. Exact notices collected from the Python build environment are placed in `legal/third-party` inside packaged builds; Windows and Linux installers also install them as readable files beside the application or under the platform documentation directory.
+
+Micboard and NewsTalentMonitorPlus are credited inspirations, not bundled dependencies. See [ChurchBoard legal information](LEGAL.md).

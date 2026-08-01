@@ -13,6 +13,15 @@ exec((project / "app" / "version.py").read_text(), version_scope)
 app_version = version_scope["__version__"]
 mac_icon = str(project / "packaging" / "assets" / "ChurchBoard.icns")
 windows_icon = str(project / "packaging" / "assets" / "ChurchBoard.ico")
+datas = [
+    (str(project / "app" / "static"), "app/static"),
+    (str(project / "LICENSE"), "."),
+    (str(project / "LEGAL.md"), "."),
+    (str(project / "THIRD_PARTY_NOTICES.md"), "."),
+]
+collected_licenses = project / "build" / "legal" / "third-party"
+if collected_licenses.is_dir():
+    datas.append((str(collected_licenses), "legal/third-party"))
 tray_hidden_imports = []
 if sys.platform == "darwin":
     tray_hidden_imports.extend(["app.tray", "PIL.Image", "pystray", "pystray._darwin"])
@@ -23,7 +32,7 @@ a = Analysis(
     [str(project / "run.py")],
     pathex=[str(project)],
     binaries=[],
-    datas=[(str(project / "app" / "static"), "app/static")],
+    datas=datas,
     hiddenimports=[
         "uvicorn.logging",
         "uvicorn.loops.auto",

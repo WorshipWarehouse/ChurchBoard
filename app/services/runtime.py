@@ -443,9 +443,9 @@ class RuntimeService:
     @staticmethod
     def demo_state(now: datetime | None = None) -> dict[str, Any]:
         people = [
-            {"id": "1", "name": "Jordan Lee", "position": "Vox 1", "position_key": "band::vox 1", "team_id": "band", "team_name": "Band", "photo": "", "status": "Confirmed"},
-            {"id": "2", "name": "Morgan Reed", "position": "Vox 2", "position_key": "band::vox 2", "team_id": "band", "team_name": "Band", "photo": "", "status": "Confirmed"},
-            {"id": "3", "name": "Taylor Brooks", "position": "Worship Leader", "position_key": "band::worship leader", "team_id": "band", "team_name": "Band", "photo": "", "status": "Confirmed"},
+            {"id": "1", "name": "Jordan Lee", "position": "Vox 1", "position_key": "band::vox 1", "team_id": "band", "team_name": "Band", "photo": "/static/demo-people/jordan-lee.jpg", "status": "Confirmed"},
+            {"id": "2", "name": "Morgan Reed", "position": "Vox 2", "position_key": "band::vox 2", "team_id": "band", "team_name": "Band", "photo": "/static/demo-people/morgan-reed.jpg", "status": "Confirmed"},
+            {"id": "3", "name": "Taylor Brooks", "position": "Worship Leader", "position_key": "band::worship leader", "team_id": "band", "team_name": "Band", "photo": "/static/demo-people/taylor-brooks.jpg", "status": "Confirmed"},
         ]
         items = [
             {"id": "1", "title": "Welcome", "length": 180, "starts_after": 0, "notes": [], "leader": "Morgan Reed"},

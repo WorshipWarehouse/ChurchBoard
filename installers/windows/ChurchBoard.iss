@@ -34,6 +34,10 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "..\..\dist\ChurchBoard.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\LEGAL.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\build\legal\third-party\*"; DestDir: "{app}\legal\third-party"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\ChurchBoard"; Filename: "{app}\{#AppExeName}"; Parameters: "--page desktop"; IconFilename: "{app}\{#AppExeName}"
