@@ -77,7 +77,35 @@ class RuntimeService:
         if propresenter.configured and (force or pp_due):
             self._last_refresh["propresenter"] = clock
             try:
-                next_state["propresenter"] = await propresenter.status()
+                previous_presentation = next_state.get("propresenter") or {}
+                fresh_presentation = await propresenter.status()
+                same_presentation = (
+                    fresh_presentation.get("presentation_uuid")
+                    and fresh_presentation.get("presentation_uuid") == previous_presentation.get("presentation_uuid")
+                ) or (
+                    not fresh_presentation.get("presentation_uuid")
+                    and fresh_presentation.get("title") == previous_presentation.get("title")
+                )
+                if same_presentation:
+                    for key in ("planning_center_item_id", "planning_center_item_title"):
+                        if previous_presentation.get(key) and not fresh_presentation.get(key):
+                            fresh_presentation[key] = previous_presentation[key]
+                service = next_state.get("service") or {}
+                if live_config.get("enabled") and fresh_presentation.get("connected") and service.get("items"):
+                    current_id = str(((next_state.get("timing") or {}).get("current_item") or {}).get("id") or "")
+                    preliminary_match = self._match_presentation_item(
+                        str(fresh_presentation.get("title") or ""),
+                        service.get("items") or [],
+                        current_id,
+                        live_config,
+                        service_item_title=str(fresh_presentation.get("service_item_title") or ""),
+                        service_item_index=fresh_presentation.get("service_item_index"),
+                        is_pco_item=bool(fresh_presentation.get("service_item_is_pco")),
+                    )
+                    if preliminary_match:
+                        fresh_presentation["planning_center_item_id"] = preliminary_match.get("id")
+                        fresh_presentation["planning_center_item_title"] = preliminary_match.get("title")
+                next_state["propresenter"] = fresh_presentation
             except Exception as exc:
                 next_state["propresenter"] = {"connected": False, "error": str(exc), "current": {}, "next": {}}
         # Publish slide changes before slower cloud integrations finish so a

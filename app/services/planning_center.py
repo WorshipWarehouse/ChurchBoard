@@ -462,7 +462,10 @@ def calculate_timing(plan: dict[str, Any] | None, now: datetime | None = None) -
     if not start or not items:
         return {"state": "scheduled", "current_item": None, "next_item": items[0] if items else None, "item_delta": 0, "overall_delta": 0, **timing_context}
     elapsed = int((now - start).total_seconds())
-    current_index = next((index for index, item in enumerate(items) if item.get("live_start_at") and not item.get("live_end_at")), None) if elapsed >= 0 else None
+    # Services LIVE is also used for rehearsals, which can happen hours or
+    # days before the first scheduled service. An open LIVE item must win over
+    # the wall-clock schedule or the timing bar incorrectly stays at 0:00.
+    current_index = next((index for index, item in enumerate(items) if item.get("live_start_at") and not item.get("live_end_at")), None)
     live = current_index is not None
     for index, item in enumerate(items):
         if current_index is not None:
@@ -475,17 +478,30 @@ def calculate_timing(plan: dict[str, Any] | None, now: datetime | None = None) -
     current = items[current_index]
     live_start = parse_time(current.get("live_start_at"))
     item_elapsed = int((now - live_start).total_seconds()) if live_start else elapsed - current["starts_after"]
-    if elapsed < 0:
+    if not live and elapsed < 0:
         item_elapsed = 0
+    item_elapsed = max(0, item_elapsed)
     planned_progress = current["starts_after"] + max(0, min(item_elapsed, current["length"]))
+    service_elapsed = elapsed
+    if live:
+        # Convert every known LIVE start into an implied service origin. The
+        # earliest origin preserves delay accumulated by previous items, while
+        # still producing useful timing if only the current item is known.
+        live_origins = [
+            item_start - timedelta(seconds=int(item.get("starts_after") or 0))
+            for item in items
+            if (item_start := parse_time(item.get("live_start_at")))
+        ]
+        if live_origins:
+            service_elapsed = max(0, int((now - min(live_origins)).total_seconds()))
     return {
-        "state": "running" if elapsed >= 0 else "upcoming",
+        "state": "running" if live or elapsed >= 0 else "upcoming",
         "current_item": current,
         "next_item": items[current_index + 1] if current_index + 1 < len(items) else None,
-        "item_delta": item_elapsed - current["length"] if elapsed >= 0 else 0,
+        "item_delta": item_elapsed - current["length"] if live or elapsed >= 0 else 0,
         "item_elapsed": item_elapsed,
-        "overall_delta": elapsed - planned_progress if elapsed >= 0 else 0,
-        "service_elapsed": elapsed,
+        "overall_delta": service_elapsed - planned_progress if live or elapsed >= 0 else 0,
+        "service_elapsed": service_elapsed,
         "live": live,
         **timing_context,
     }

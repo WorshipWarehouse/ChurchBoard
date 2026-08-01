@@ -112,6 +112,25 @@ class PlanningCenterTests(unittest.TestCase):
         self.assertEqual(timing["current_item"]["id"], "two")
         self.assertEqual(timing["item_elapsed"], 30)
 
+    def test_live_rehearsal_timing_overrides_a_future_service_clock(self):
+        now = datetime(2030, 1, 5, 10, 2, tzinfo=timezone.utc)
+        plan = {
+            "starts_at": "2030-01-06T13:30:00+00:00",
+            "times": [{"id": "early", "starts_at": "2030-01-06T13:30:00+00:00", "ends_at": "2030-01-06T14:30:00+00:00"}],
+            "items": [
+                {"id": "one", "title": "Opening", "length": 60, "service_times": [{"plan_time_id": "early", "live_start_at": "2030-01-05T10:00:00+00:00", "live_end_at": "2030-01-05T10:01:30+00:00"}]},
+                {"id": "two", "title": "Message", "length": 60, "service_times": [{"plan_time_id": "early", "live_start_at": "2030-01-05T10:01:30+00:00", "live_end_at": None}]},
+            ],
+        }
+        timing = calculate_timing(plan, now)
+        self.assertEqual(timing["state"], "running")
+        self.assertTrue(timing["live"])
+        self.assertEqual(timing["current_item"]["id"], "two")
+        self.assertEqual(timing["item_elapsed"], 30)
+        self.assertEqual(timing["item_delta"], -30)
+        self.assertEqual(timing["overall_delta"], 30)
+        self.assertEqual(timing["service_elapsed"], 120)
+
     def test_position_key_is_scoped_to_team(self):
         self.assertEqual(position_key("42", "  Vox 1 "), "42::vox 1")
 
