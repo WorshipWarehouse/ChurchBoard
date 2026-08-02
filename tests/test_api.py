@@ -41,6 +41,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(editor.status_code, 200)
         self.assertIn("churchboard-icon.png", editor.text)
         self.assertIn('id="dashboard-background-color" type="color"', editor.text)
+        self.assertIn('input name="show_title" type="checkbox"', editor.text)
+        self.assertIn('select name="slide_layout"', editor.text)
+        self.assertIn('input name="show_parts" type="checkbox"', editor.text)
         self.assertNotIn('id="dashboard-theme"', editor.text)
         self.assertNotIn('target="_blank"', editor.text)
         display_script = self.client.get("/static/display.js").text
@@ -50,6 +53,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn('event.key==="Escape"', display_script)
         common_script = self.client.get("/static/common.js").text
         self.assertIn('class="unassigned-board-icon"', common_script)
+        self.assertIn('settings.slide_layout==="previews_only"', common_script)
+        self.assertIn('settings.show_title===false', common_script)
         stylesheet = self.client.get("/static/style.css").text
         self.assertIn('mask:url("/static/churchboard-mark.svg")', stylesheet)
         mark = self.client.get("/static/churchboard-mark.svg")

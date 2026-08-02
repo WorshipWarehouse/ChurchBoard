@@ -25,6 +25,9 @@ class StoreTests(unittest.TestCase):
             self.assertFalse(store.load()["dashboards"][0]["widgets"][3]["settings"]["use_planning_center_icon"])
             self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["unassigned_media_title"], "Icon")
             self.assertEqual(store.load()["dashboards"][0]["background_color"], "#0a0d12")
+            slides = store.load()["dashboards"][0]["widgets"][4]["settings"]
+            self.assertEqual(slides["slide_layout"], "full")
+            self.assertTrue(slides["show_parts"])
             self.assertNotIn("theme", store.load()["dashboards"][0])
             self.assertEqual(store.load()["settings"]["planning_center"]["service_types"], [])
 
