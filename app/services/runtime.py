@@ -371,6 +371,25 @@ class RuntimeService:
         ]
 
     @classmethod
+    def _pco_pre_service_indexed_item(cls, items: list[dict[str, Any]], service_item_index: int | None) -> dict[str, Any] | None:
+        """Resolve indexes exposed while ProPresenter is in a pre-service section.
+
+        ProPresenter reports the top-level Planning Center row index before the
+        main Service header, but reports an index relative to the main section
+        once that section is active. Keeping the pre-service rows available is
+        what lets a locally named presentation such as Announcements resolve
+        back to Planning Center's Pre-Service Slides item.
+        """
+        if not isinstance(service_item_index, int) or not 0 <= service_item_index < len(items):
+            return None
+        first_main_item = next((item for item in cls._pco_playlist_items(items)), None)
+        main_start = items.index(first_main_item) if first_main_item in items else 0
+        candidate = items[service_item_index]
+        if service_item_index >= main_start or str(candidate.get("item_type") or "").casefold() == "header":
+            return None
+        return candidate
+
+    @classmethod
     def _match_presentation_item(cls, title: str, items: list[dict[str, Any]], current_item_id: str, settings: dict[str, Any], *, service_item_title: str = "", service_item_index: int | None = None, is_pco_item: bool = False) -> dict[str, Any] | None:
         candidates = list(items)
         song_candidates = [item for item in candidates if str(item.get("item_type") or "").casefold() == "song"]
@@ -379,6 +398,7 @@ class RuntimeService:
         matches = [item for item in preferred if cls._title_score(source_title, item.get("title") or "") == 1]
         playlist_items = cls._pco_playlist_items(items) if is_pco_item else []
         indexed_item = playlist_items[service_item_index] if isinstance(service_item_index, int) and 0 <= service_item_index < len(playlist_items) else None
+        pre_service_item = cls._pco_pre_service_indexed_item(items, service_item_index) if is_pco_item else None
         if matches:
             # The ProPresenter playlist omits some Planning Center rows (for
             # example headers and countdowns), so its index is not necessarily
@@ -387,6 +407,8 @@ class RuntimeService:
             current_index = next((index for index, item in enumerate(items) if str(item.get("id")) == str(current_item_id)), 0)
             indexed_matches = [(index, item) for index, item in enumerate(items) if item in matches]
             return min(indexed_matches, key=lambda pair: (pair[0] < current_index, abs(pair[0] - current_index)))[1]
+        if pre_service_item:
+            return pre_service_item
         if indexed_item:
             # ProPresenter's is_pco flag means this playlist was created from
             # the Planning Center plan. Its playlist index remains linked to

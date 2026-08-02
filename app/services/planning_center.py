@@ -56,18 +56,41 @@ def selected_service_time(plan: dict[str, Any], now: datetime | None = None) -> 
     return upcoming[0][2] if upcoming else rows[-1][2]
 
 
+def _main_service_header_index(items: list[dict[str, Any]]) -> int | None:
+    """Locate the header whose following item begins at the service time.
+
+    Planning Center includes pre-service and post-service sections in the same
+    plan. The PlanTime starts_at value belongs to the main service header, not
+    the first pre-service row.
+    """
+    for index, item in enumerate(items):
+        if str(item.get("item_type") or "").casefold() != "header":
+            continue
+        title = " ".join(re.sub(r"[^a-z0-9]+", " ", str(item.get("title") or "").casefold()).split())
+        words = set(title.split())
+        if title in {"service", "main service", "worship service"} or (
+            "service" in words and not words.intersection({"pre", "preservice", "post", "postservice", "after"})
+        ):
+            return index
+    return None
+
+
 def service_items(plan: dict[str, Any], service_time_id: str | None) -> list[dict[str, Any]]:
-    result, elapsed = [], 0
+    result = []
     for item in plan.get("items") or []:
         matching = next((row for row in item.get("service_times") or [] if str(row.get("plan_time_id") or "") == str(service_time_id or "")), None)
         if matching and matching.get("exclude"):
             continue
-        row = {**item, "starts_after": elapsed}
+        row = {**item}
         if matching:
             row["live_start_at"] = item.get("live_start_at") or matching.get("live_start_at")
             row["live_end_at"] = item.get("live_end_at") or matching.get("live_end_at")
-        elapsed += int(row.get("length") or 0)
         result.append(row)
+    anchor = _main_service_header_index(result)
+    elapsed = -sum(int(item.get("length") or 0) for item in result[:anchor]) if anchor is not None else 0
+    for row in result:
+        row["starts_after"] = elapsed
+        elapsed += int(row.get("length") or 0)
     return result
 
 

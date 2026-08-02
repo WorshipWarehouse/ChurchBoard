@@ -108,6 +108,24 @@ class PlanningCenterTests(unittest.TestCase):
         self.assertEqual(timing["current_item"]["id"], "two")
         self.assertEqual(timing["current_item"]["starts_after"], 0)
 
+    def test_pre_and_post_service_items_are_kept_and_anchored_around_service_start(self):
+        plan = {
+            "times": [{"id": "service", "starts_at": "2030-01-06T13:30:00+00:00", "ends_at": "2030-01-06T14:31:00+00:00"}],
+            "items": [
+                {"id": "pre-header", "title": "Pre-Service", "item_type": "header", "length": 0},
+                {"id": "slides", "title": "Pre-Service Slides", "item_type": "item", "length": 0},
+                {"id": "countdown", "title": "Countdown", "item_type": "item", "length": 300},
+                {"id": "service-header", "title": "Service", "item_type": "header", "length": 0},
+                {"id": "welcome", "title": "Welcome", "item_type": "item", "length": 60},
+                {"id": "post-header", "title": "Post-Service", "item_type": "header", "length": 0},
+                {"id": "reset", "title": "Room Reset", "item_type": "item", "length": 120},
+            ],
+        }
+        timing = calculate_timing(plan, datetime(2030, 1, 6, 13, 30, 10, tzinfo=timezone.utc))
+        self.assertEqual([item["id"] for item in timing["service_items"]], ["pre-header", "slides", "countdown", "service-header", "welcome", "post-header", "reset"])
+        self.assertEqual([item["starts_after"] for item in timing["service_items"]], [-300, -300, -300, 0, 0, 60, 60])
+        self.assertEqual(timing["current_item"]["id"], "welcome")
+
     def test_timing_finds_current_item(self):
         now = datetime.now(timezone.utc)
         plan = {"starts_at": (now - timedelta(seconds=90)).isoformat(), "planned_length": 180, "items": [{"id": "one", "title": "One", "starts_after": 0, "length": 60}, {"id": "two", "title": "Two", "starts_after": 60, "length": 120}]}
@@ -748,6 +766,26 @@ class ProPresenterTests(unittest.TestCase):
             is_pco_item=True,
         )
         self.assertEqual(match["id"], "message")
+
+    def test_pco_pre_service_index_keeps_linked_rows_before_main_service(self):
+        items = [
+            {"id": "pre", "title": "Pre-Service", "item_type": "header"},
+            {"id": "slides", "title": "Pre-Service Slides", "item_type": "item"},
+            {"id": "countdown", "title": "Countdown", "item_type": "item"},
+            {"id": "service", "title": "Service", "item_type": "header"},
+            {"id": "great", "title": "Great I Am", "item_type": "song"},
+            {"id": "center", "title": "Center", "item_type": "song"},
+        ]
+        match = RuntimeService._match_presentation_item(
+            "Announcements",
+            items,
+            "center",
+            {"songs_only": True, "match_mode": "exact"},
+            service_item_title="Announcements",
+            service_item_index=1,
+            is_pco_item=True,
+        )
+        self.assertEqual(match["id"], "slides")
 
     def test_strong_title_fallback_can_match_a_non_song_item(self):
         items = [

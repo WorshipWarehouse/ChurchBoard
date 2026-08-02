@@ -129,3 +129,8 @@
 .editor-grid .widget:hover .resize-handle,.editor-grid .widget.selected .resize-handle{background:linear-gradient(135deg,transparent 38%,color-mix(in srgb,var(--blue) 55%,transparent) 39%)}
 body.resizing-widget,body.resizing-widget *{cursor:nwse-resize!important}
 body.moving-widget,body.moving-widget *{cursor:grabbing!important}
+
+/* Short summary widgets share the same vertical rhythm and visual center. */
+.widget[data-widget-type="clock"] .widget-body,.widget[data-widget-type="service"] .widget-body{display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
+.widget[data-widget-type="clock"] .clock-date,.widget[data-widget-type="service"] .service-meta{margin-top:clamp(2px,1.6cqh,7px)}
+.widget[data-widget-type="timing"] .timing-cell{display:flex;flex-direction:column;justify-content:center}
