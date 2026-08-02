@@ -98,6 +98,19 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["manual_plan"]["id"], "demo")
 
+    def test_compact_runtime_omits_cached_planning_center_content(self):
+        response = self.client.get("/api/runtime?compact=true")
+        runtime = response.json()
+        self.assertIn("propresenter", runtime)
+        self.assertIn("mics", runtime)
+        self.assertIn("timing", runtime)
+        self.assertNotIn("service_items", runtime["timing"])
+        for cached_key in ("service", "people", "plans", "planning_center_media"):
+            self.assertNotIn(cached_key, runtime)
+        cached = self.client.get("/api/runtime?compact=true", headers={"If-None-Match": response.headers["etag"]})
+        self.assertEqual(cached.status_code, 304)
+        self.assertEqual(cached.content, b"")
+
     def test_service_control_endpoint_takes_and_advances_service(self):
         taken = self.client.post("/api/service-control/take")
         self.assertEqual(taken.status_code, 200)

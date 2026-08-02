@@ -76,3 +76,12 @@
 .order-duration strong{color:var(--text);font-size:clamp(.65rem,2.9cqw,.9rem);font-variant-numeric:tabular-nums}
 .order-duration small{color:var(--muted);font-size:clamp(.4rem,1.6cqw,.54rem);font-weight:750;letter-spacing:.04em}
 .order-list.priority-window .order-duration small{display:none}
+
+/* Order rows stay intact. Small widgets show fewer complete rows instead of
+   clipping text or hiding leader and microphone details inside a row. */
+.order-service-time em{font:inherit;font-style:normal}
+.order-list{overflow:hidden}
+.order-list li.order-hidden{display:none}
+.order-list.priority-window li{height:auto;padding-block:clamp(3px,1cqh,6px);overflow:visible}
+.order-list.priority-window .order-leader{display:flex}
+.order-list.priority-window .order-eta small,.order-list.priority-window .order-duration small{display:block}

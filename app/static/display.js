@@ -1,5 +1,6 @@
-let dashboard, lastState={},serverInstance="",refreshInFlight=false,planOptionsKey="",planSelectionInFlight=false;
+let dashboard,lastState={},serverInstance="",refreshInFlight=false,planOptionsKey="",planSelectionInFlight=false,lastFullRefresh=0,compactEtag="";
 const widgetRenderKeys=new Map();
+const objectIds=new WeakMap();let nextObjectId=1;
 const slug=decodeURIComponent(location.pathname.split("/").pop());
 const splEngine={context:null,analyser:null,bins:null,stream:null,running:false,autoAttempted:false,rawDb:null};
 const aWeighting=frequency=>{if(frequency<=0)return-120;const f2=frequency*frequency,numerator=(12200**2)*(f2**2),denominator=(f2+20.6**2)*Math.sqrt((f2+107.7**2)*(f2+737.9**2))*(f2+12200**2);return 20*Math.log10(numerator/denominator)+2};
@@ -25,46 +26,98 @@ async function loadBoard(){
   const root=document.querySelector("#dashboard");
   root.style.setProperty("--columns",dashboard.columns); root.style.setProperty("--row-height",`${dashboard.row_height}px`);
   root.innerHTML="";widgetRenderKeys.clear();
-  await refresh();
+  await refresh(true);
 }
-async function refresh(){
+const sameJson=(left,right)=>JSON.stringify(left)===JSON.stringify(right);
+const retainCachedValue=(previous,next)=>previous!==undefined&&sameJson(previous,next)?previous:next;
+function mergeFullState(fresh){
+  if(!Object.keys(lastState).length)return fresh;
+  for(const key of ["service","people","plans","planning_center_media"]){
+    if(key in fresh)fresh[key]=retainCachedValue(lastState[key],fresh[key]);
+  }
+  if(fresh.timing&&lastState.timing&&fresh.timing.service_items){
+    fresh.timing.service_items=retainCachedValue(lastState.timing.service_items,fresh.timing.service_items);
+  }
+  return fresh;
+}
+function mergeCompactState(fresh){
+  const previousTiming=lastState.timing||{},incomingTiming=fresh.timing||{};
+  return {...lastState,...fresh,timing:{...previousTiming,...incomingTiming,service_items:previousTiming.service_items}};
+}
+async function compactRuntime(){
+  const response=await fetch("/api/runtime?compact=true",{headers:compactEtag?{"If-None-Match":compactEtag}:{}});
+  if(response.status===304)return null;
+  if(!response.ok)throw new Error((await response.json().catch(()=>({}))).detail||`Request failed (${response.status})`);
+  compactEtag=response.headers.get("ETag")||"";return response.json();
+}
+async function refresh(forceFull=false){
   if(refreshInFlight)return;
   refreshInFlight=true;
-  try{lastState=await api("/api/runtime"); render(); updatePlans();}catch(error){console.error(error)}finally{refreshInFlight=false}
+  try{
+    const now=Date.now(),full=forceFull||!lastFullRefresh||now-lastFullRefresh>=5000,fresh=full?await api("/api/runtime"):await compactRuntime();
+    if(!fresh)return;
+    lastState=full?mergeFullState(fresh):mergeCompactState(fresh);if(full)lastFullRefresh=now;
+    render();updatePlans();
+  }catch(error){console.error(error)}finally{refreshInFlight=false}
 }
 async function checkServerInstance(){try{const info=await api("/api/app-info");if(serverInstance&&serverInstance!==info.instance_id){location.reload();return}serverInstance=info.instance_id}catch(error){}}
 function render(){
   const root=document.querySelector("#dashboard"),widgets=dashboard.widgets||[],existing=new Map([...root.querySelectorAll(":scope > .widget")].map(element=>[String(element.dataset.widget),element])),activeIds=new Set(),timing=lastState.timing||{};
   let changed=false;
   for(const widget of widgets){
-    const id=String(widget.id),markup=widgetMarkup(widget,lastState),renderKey=widget.type==="timing"?`timing:${String(timing.current_item?.id||"")}:${timing.rehearsal===true}`:markup;
+    const id=String(widget.id),renderKey=widgetStateKey(widget,lastState);
     activeIds.add(id);
     if(widgetRenderKeys.get(id)===renderKey&&existing.has(id))continue;
+    const markup=widgetMarkup(widget,lastState);
     const template=document.createElement("template");template.innerHTML=markup.trim();const replacement=template.content.firstElementChild,current=existing.get(id);
     if(current)current.replaceWith(replacement);else root.append(replacement);
     widgetRenderKeys.set(id,renderKey);changed=true;
   }
   for(const [id,element] of existing){if(!activeIds.has(id)){element.remove();widgetRenderKeys.delete(id);changed=true}}
   if(!widgets.length&&root.innerHTML!==`<div class="empty">This dashboard has no widgets.</div>`){root.innerHTML=`<div class="empty">This dashboard has no widgets.</div>`;changed=true}
-  updateTimingWidgets();tickClocks();
-  if(changed){enhanceDynamicContent(root);keepCurrentOrderItemVisible(root)}
+  updateTimingWidgets();updateOrderTimingWidgets();
+  if(changed){tickClocks();enhanceDynamicContent(root)}
   maybeAutoStartSpl();
 }
-function keepCurrentOrderItemVisible(root){
+function objectId(value){if(!value||typeof value!=="object")return String(value);if(!objectIds.has(value))objectIds.set(value,nextObjectId++);return objectIds.get(value)}
+function leaderMicKey(mics){return(mics||[]).map(mic=>[mic.id,mic.name,mic.receiver,mic.assignment?.person_id,mic.assignment?.id,mic.assignment?.name,mic.assignment?.position_key])}
+function widgetStateKey(widget,state){
+  const timing=state.timing||{},service=state.service||{},pp=state.propresenter||{},settings=widget.settings||{};
+  if(widget.type==="clock"||widget.type==="spl"||widget.type==="text")return`${widget.type}:static`;
+  if(widget.type==="service")return`service:${objectId(service)}:${timing.source||""}:${timing.state||""}`;
+  if(widget.type==="timing")return`timing:${String(timing.current_item?.id||"")}:${timing.rehearsal===true}`;
+  if(["assignments","mics"].includes(widget.type))return`${widget.type}:${JSON.stringify([state.people||[],state.mics||[],state.planning_center_media||{}])}`;
+  if(widget.type==="slides")return`slides:${JSON.stringify(pp)}`;
+  if(widget.type==="notes")return`notes:${String(pp.current?.notes||"")}`;
+  if(widget.type==="order")return`order:${objectId(timing.service_items||service.items)}:${objectId(state.people)}:${JSON.stringify(leaderMicKey(state.mics))}:${String(timing.current_item?.id||"")}:${timing.service_time_id||""}:${settings.show_leader!==false}:${settings.show_mic!==false}`;
+  if(widget.type==="people"||widget.type==="person")return`${widget.type}:${objectId(state.people)}`;
+  if(widget.type==="controls")return`controls:${JSON.stringify([state.planning_center_live||{},state.service_control||{},timing.current_item?.id,timing.current_item?.title])}`;
+  return`${widget.type}:${JSON.stringify(state)}`;
+}
+function fitOrderService(root=document){
   root.querySelectorAll(".order-list").forEach(list=>{
-    const rows=[...list.querySelectorAll("li")],active=list.querySelector("li.active"),activeIndex=rows.indexOf(active);if(!active||activeIndex<0)return;
-    const windowStart=Math.max(0,activeIndex-2),windowEnd=Math.min(rows.length,activeIndex+4),priorityRows=rows.slice(windowStart,windowEnd),naturalHeight=priorityRows.reduce((total,row)=>total+row.getBoundingClientRect().height,0),compact=naturalHeight>list.clientHeight;
-    list.classList.toggle("priority-window",compact);if(compact)list.style.setProperty("--order-priority-height",`${Math.max(12,Math.floor(list.clientHeight/priorityRows.length))}px`);else list.style.removeProperty("--order-priority-height");
-    const listRect=list.getBoundingClientRect(),contentTop=row=>row.getBoundingClientRect().top-listRect.top+list.scrollTop,first=rows[windowStart],thirdNext=rows[Math.min(rows.length-1,activeIndex+3)];
-    let target=contentTop(first),requiredBottom=contentTop(thirdNext)+thirdNext.getBoundingClientRect().height;
-    if(requiredBottom-target>list.clientHeight)target=Math.max(0,requiredBottom-list.clientHeight);
-    list.scrollTop=Math.max(0,target);
+    const rows=[...list.querySelectorAll("li")];if(!rows.length)return;
+    rows.forEach(row=>row.classList.remove("order-hidden"));
+    const foundActive=rows.findIndex(row=>row.classList.contains("active")),activeIndex=foundActive>=0?foundActive:0,heights=rows.map(row=>Math.ceil(row.getBoundingClientRect().height)),available=Math.max(0,list.clientHeight-2),priority=[];
+    priority.push(activeIndex);
+    for(let offset=1;offset<=3;offset++)if(activeIndex+offset<rows.length)priority.push(activeIndex+offset);
+    for(let offset=1;offset<=2;offset++)if(activeIndex-offset>=0)priority.push(activeIndex-offset);
+    for(let offset=4;activeIndex+offset<rows.length;offset++)priority.push(activeIndex+offset);
+    for(let offset=3;activeIndex-offset>=0;offset++)priority.push(activeIndex-offset);
+    const visible=new Set();let used=0;
+    for(const index of priority){const height=heights[index];if(!visible.size||used+height<=available){visible.add(index);used+=height}}
+    rows.forEach((row,index)=>row.classList.toggle("order-hidden",!visible.has(index)));list.scrollTop=0;
   });
 }
 function updateTimingWidgets(){
   const timing=lastState.timing||{},item=timing.current_item,cells=document.querySelectorAll('[data-widget-type="timing"] .timing-cell');
-  if(cells[0]){const label=cells[0].querySelector(".timing-label"),value=cells[0].querySelector(".timing-value");if(label)label.textContent=item?.title||"Current item";if(value){value.textContent=formatDuration(timing.item_delta||0);value.classList.toggle("over",(timing.item_delta||0)>0);value.classList.toggle("ahead",(timing.item_delta||0)<=0)}}
-  if(cells[1]){const value=cells[1].querySelector(".timing-value");if(value){value.textContent=formatDuration(timing.overall_delta||0);value.classList.toggle("over",(timing.overall_delta||0)>0);value.classList.toggle("ahead",(timing.overall_delta||0)<=0)}}
+  if(cells[0]){const label=cells[0].querySelector(".timing-label"),value=cells[0].querySelector(".timing-value"),labelText=item?.title||"Current item",valueText=formatDuration(timing.item_delta||0);if(label&&label.textContent!==labelText)label.textContent=labelText;if(value){if(value.textContent!==valueText)value.textContent=valueText;value.classList.toggle("over",(timing.item_delta||0)>0);value.classList.toggle("ahead",(timing.item_delta||0)<=0)}}
+  if(cells[1]){const value=cells[1].querySelector(".timing-value"),valueText=formatDuration(timing.overall_delta||0);if(value){if(value.textContent!==valueText)value.textContent=valueText;value.classList.toggle("over",(timing.overall_delta||0)>0);value.classList.toggle("ahead",(timing.overall_delta||0)<=0)}}
+}
+function updateOrderTimingWidgets(){
+  const timing=lastState.timing||{},service=lastState.service||{},adjusting=["running","live","controlled"].includes(timing.state),drift=Number(timing.overall_delta||0),driftLabel=adjusting&&Math.abs(drift)>=30?`${formatDuration(drift)} ${drift>0?"late":"early"}`:"On time",start=Date.parse(timing.service_start_at||service.starts_at||"");
+  document.querySelectorAll("[data-order-drift]").forEach(element=>{if(element.textContent!==driftLabel)element.textContent=driftLabel});
+  document.querySelectorAll("[data-order-eta]").forEach(element=>{const value=Number.isFinite(start)?formatClockTime(new Date(start+Number(element.dataset.startsAfter||0)*1000+(adjusting?drift:0)*1000),lastState.timezone):"—";if(element.textContent!==value)element.textContent=value});
 }
 document.addEventListener("click",async event=>{
   if(event.target.closest("[data-spl-start]")){await startSpl();return}

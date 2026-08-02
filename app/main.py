@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from copy import deepcopy
+from hashlib import sha256
 import ipaddress
+import json
 import threading
 from uuid import uuid4
 from zoneinfo import available_timezones
@@ -160,8 +162,31 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
 
 
 @app.get("/api/runtime")
-async def get_runtime(request: Request) -> dict:
-    return deepcopy(request.app.state.runtime.state)
+async def get_runtime(request: Request, compact: bool = False) -> dict:
+    state = deepcopy(request.app.state.runtime.state)
+    if not compact:
+        return state
+
+    # ProPresenter is polled quickly, while the Planning Center plan, people,
+    # photos, and media catalog change slowly and are cached by the display.
+    timing = state.get("timing") or {}
+    timing.pop("service_items", None)
+    payload = {
+        key: state.get(key)
+        for key in (
+            "updated_at",
+            "timing",
+            "mics",
+            "propresenter",
+            "planning_center_live",
+            "service_control",
+        )
+    }
+    encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    etag = f'"{sha256(encoded).hexdigest()}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    return Response(encoded, media_type="application/json", headers={"ETag": etag})
 
 
 @app.get("/api/app-info")
