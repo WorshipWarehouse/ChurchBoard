@@ -69,12 +69,14 @@ The address entered in ChurchBoard must be the ProPresenter computer's LAN addre
 
 In ChurchBoard's dashboard editor, select a **ProPresenter** widget and choose:
 
-- **Text** for clean slide text or **Slide image** for ProPresenter's rendered slide view;
+- **Text** for clean slide text or **Slide image** for ProPresenter's slide thumbnail;
 - current slide, next slide, both, or neither;
 - `Slide x of y` on or off;
 - item/playlist title, slide notes, and current/next part labels.
 
 Part labels use their ProPresenter colors. If parts do not change with the slide, confirm the cues/groups in the presentation are named and colored in ProPresenter.
+
+When the live slide text contains a countdown, ChurchBoard composites the changing time over the otherwise static slide thumbnail. When ProPresenter reports active video media, ChurchBoard also displays its playing state, elapsed time, duration, and progress. ProPresenter's HTTP API exposes static cue/media thumbnails and transport information, but not live rendered audience-screen frames, so moving video cannot be reproduced from that API alone. A true moving preview would require a separate browser-compatible output stream from ProPresenter or a capture application such as OBS.
 
 ## 5. Let ProPresenter drive Planning Center Services LIVE
 

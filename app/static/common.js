@@ -30,8 +30,12 @@ const contrastText = value => {
 const partBug = (slide,label) => { const color=safeCssColor(slide.color),kind=label.toLocaleLowerCase(); return `<div class="part-chip part-${kind}" style="--part-color:${color};--part-text:${contrastText(color)}"><span>${label}</span><strong>${escapeHtml(slide.part||"Unlabeled")}</strong></div>`; };
 const slidePreview = (slide,label,{notes=false,mode="image",showLabel=true}={}) => {
   const image=mode==="image"&&slide.image_url?`<img class="slide-image" src="${escapeHtml(slide.image_url)}" alt="${label} slide preview">`:"";
-  return `<div class="slide ${label==="Now"?"current":""} mode-${mode}">${showLabel?`<div class="slide-label">${label}</div>`:""}<div class="slide-canvas"><div class="slide-text" data-fit-slide>${escapeHtml(slide.text||"No active slide")}</div>${image}</div>${notes&&slide.notes?`<div class="slide-notes">${escapeHtml(slide.notes)}</div>`:""}</div>`;
+  const timer=mode==="image"&&slide.timer_text?`<div class="slide-live-timer" data-fit-widget-text>${escapeHtml(slide.timer_text)}</div>`:"";
+  const media=slide.media||{},video=mode==="image"&&media.is_playing&&!media.audio_only,position=Math.max(0,Number(media.position)||0),duration=Math.max(0,Number(media.duration)||0),progress=duration?Math.min(100,position/duration*100):0;
+  const videoStatus=video?`<div class="slide-video-status"><div><strong>VIDEO · PLAYING</strong><span>${duration?`${formatMediaTime(position)} / ${formatMediaTime(duration)}`:"Live playback"}</span></div>${duration?`<div class="slide-video-track"><i style="width:${progress}%"></i></div>`:""}</div>`:"";
+  return `<div class="slide ${label==="Now"?"current":""} mode-${mode}">${showLabel?`<div class="slide-label">${label}</div>`:""}<div class="slide-canvas ${video?"has-video":""}"><div class="slide-text" data-fit-slide>${escapeHtml(slide.text||"No active slide")}</div>${image}${timer}${videoStatus}</div>${notes&&slide.notes?`<div class="slide-notes">${escapeHtml(slide.notes)}</div>`:""}</div>`;
 };
+const formatMediaTime = seconds => {const value=Math.max(0,Math.round(Number(seconds)||0));return`${Math.floor(value/60)}:${String(value%60).padStart(2,"0")}`};
 const micIsActive = mic => mic.online===true&&Number.isFinite(Number(mic.battery_percent));
 const micHealth = mic => !micIsActive(mic)||Number(mic.battery_percent)<5?"critical":Number(mic.battery_percent)<=10?"low":"healthy";
 const micMeters = mic => `<div class="meters">${[["BAT",mic.battery_percent],["RF",mic.rf],["AUD",mic.audio]].map(([label,value])=>`<div><div class="meter-label"><span>${label}</span><span>${value||0}%</span></div><div class="meter-track"><div class="meter-fill" style="width:${value||0}%"></div></div></div>`).join("")}</div>`;

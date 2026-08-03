@@ -15,8 +15,10 @@ class ProPresenterClient:
         self._client: httpx.AsyncClient | None = None
         self._active_payload: dict[str, Any] = {}
         self._playlist_payload: dict[str, Any] = {}
+        self._transport_payload: dict[str, Any] = {}
         self._active_refreshed = 0.0
         self._playlist_refreshed = 0.0
+        self._transport_refreshed = 0.0
 
     @property
     def configured(self) -> bool:
@@ -80,6 +82,19 @@ class ProPresenterClient:
         next_result["notes"] = next_result["notes"] or self._notes(next_details)
         presentation_uuid = self._presentation_uuid(presentation)
         playlist_context = self._playlist_context(playlist_payload)
+        if clock - self._transport_refreshed >= 0.5:
+            transport_responses = await asyncio.gather(
+                self._http().get(f"{base}/v1/transport/presentation/current"),
+                self._http().get(f"{base}/v1/transport/presentation/time"),
+                self._http().get(f"{base}/v1/timer/video_countdown"),
+                return_exceptions=True,
+            )
+            self._transport_refreshed = clock
+            self._transport_payload = self._transport_status(*transport_responses)
+        media = self._transport_payload.get("media") or {}
+        current_timer = self._countdown_text(current_result.get("text"))
+        if not current_timer and media.get("is_playing") and not media.get("audio_only"):
+            current_timer = self._countdown_text(self._transport_payload.get("video_countdown"))
         current_result.update({
             "part": current_entry.get("part", ""),
             "color": current_entry.get("color", ""),
@@ -87,6 +102,8 @@ class ProPresenterClient:
             "total": cue_total,
             "image_url": self._thumbnail_url(presentation_uuid, current_position, current_result["image_uuid"])
             if current_result["image_uuid"] or current_details else "",
+            "timer_text": current_timer,
+            "media": media,
         })
         next_result.update({
             "part": next_entry.get("part", ""),
@@ -95,6 +112,7 @@ class ProPresenterClient:
             "total": cue_total,
             "image_url": self._thumbnail_url(presentation_uuid, next_position, next_result["image_uuid"])
             if next_result["image_uuid"] or next_details else "",
+            "timer_text": self._countdown_text(next_result.get("text")),
         })
         return {
             "connected": True,
@@ -137,6 +155,45 @@ class ProPresenterClient:
             "notes": raw.get("notes") or raw.get("slide_notes") or "",
             "image_uuid": raw.get("image_uuid") or raw.get("uuid") or "",
         }
+
+    @staticmethod
+    def _countdown_text(value: Any) -> str:
+        pattern = r"-?\d{1,3}:\d{2}(?::\d{2})?(?:\.\d{1,2})?"
+        lines = [line.strip() for line in str(value or "").splitlines() if line.strip()]
+        return next((line for line in reversed(lines) if re.fullmatch(pattern, line)), "")
+
+    @staticmethod
+    def _transport_status(current: Any, position: Any, video_countdown: Any) -> dict[str, Any]:
+        def payload(response: Any) -> Any:
+            if isinstance(response, Exception) or not getattr(response, "is_success", False):
+                return None
+            try:
+                return response.json()
+            except Exception:
+                return None
+
+        media_raw = payload(current)
+        position_raw = payload(position)
+        countdown_raw = payload(video_countdown)
+        media = {}
+        if isinstance(media_raw, dict) and (media_raw.get("uuid") or media_raw.get("is_playing")):
+            try:
+                current_time = max(0.0, float(position_raw))
+            except (TypeError, ValueError):
+                current_time = 0.0
+            try:
+                duration = max(0.0, float(media_raw.get("duration") or media_raw.get("length") or 0))
+            except (TypeError, ValueError):
+                duration = 0.0
+            media = {
+                "is_playing": bool(media_raw.get("is_playing")),
+                "uuid": str(media_raw.get("uuid") or ""),
+                "name": str(media_raw.get("name") or ""),
+                "audio_only": bool(media_raw.get("audio_only")),
+                "position": current_time,
+                "duration": duration,
+            }
+        return {"media": media, "video_countdown": str(countdown_raw or "")}
 
     @staticmethod
     def _index(raw: Any) -> int:

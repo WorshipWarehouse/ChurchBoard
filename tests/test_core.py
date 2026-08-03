@@ -923,6 +923,30 @@ class ProPresenterTests(unittest.TestCase):
         self.assertEqual(ProPresenterClient._color("65a9ff"), "#65a9ff")
         self.assertEqual(ProPresenterClient._color("not-a-color"), "")
 
+    def test_live_countdown_text_is_extracted_from_slide_text(self):
+        self.assertEqual(ProPresenterClient._countdown_text("Service begins in\n05:24"), "05:24")
+        self.assertEqual(ProPresenterClient._countdown_text("-00:00:02.00"), "-00:00:02.00")
+        self.assertEqual(ProPresenterClient._countdown_text("John 3:16"), "")
+
+    def test_video_transport_status_includes_progress_and_countdown(self):
+        class Response:
+            is_success = True
+
+            def __init__(self, value):
+                self.value = value
+
+            def json(self):
+                return self.value
+
+        status = ProPresenterClient._transport_status(
+            Response({"is_playing": True, "uuid": "VIDEO-1", "name": "Countdown", "audio_only": False, "duration": 300}),
+            Response(42.5),
+            Response("00:04:17"),
+        )
+        self.assertEqual(status["media"]["position"], 42.5)
+        self.assertEqual(status["media"]["duration"], 300)
+        self.assertEqual(status["video_countdown"], "00:04:17")
+
 
 class ProPresenterPollingTests(unittest.IsolatedAsyncioTestCase):
     async def test_fast_poll_reuses_presentation_metadata_and_omits_raw_payload(self):

@@ -90,6 +90,12 @@
 .dashboard .order-list li.order-header{grid-template-columns:1fr;margin-top:clamp(2px,.7cqh,5px);padding:clamp(3px,.8cqh,6px) clamp(7px,1.8cqw,12px);border:0;border-top:1px solid color-mix(in srgb,var(--board-effect) 34%,var(--glass-inner-line));border-radius:0;background:linear-gradient(90deg,color-mix(in srgb,var(--board-effect) 15%,transparent),transparent);box-shadow:none;opacity:.92}
 .order-header .order-marker{display:none}.order-header .order-main{grid-column:1/-1}.order-header .order-main b{color:color-mix(in srgb,var(--board-effect) 75%,white);font-size:clamp(.5rem,2.2cqw,.7rem);font-weight:900;letter-spacing:.14em;text-transform:uppercase;text-shadow:0 0 10px color-mix(in srgb,var(--board-effect) 40%,transparent)}
 
+/* ProPresenter thumbnails are static, so live timer text and video transport
+   details are composited over them by ChurchBoard. */
+.slide-live-timer{position:absolute;z-index:4;left:50%;top:50%;max-width:90%;transform:translate(-50%,-50%);padding:.08em .28em;border:1px solid #ffffff38;border-radius:.18em;background:#02050aa8;box-shadow:0 8px 30px #000b,inset 0 1px 0 #ffffff26;color:#fff;font-size:clamp(1.5rem,12cqw,5rem);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.05em;white-space:nowrap;text-shadow:0 3px 14px #000,0 0 18px color-mix(in srgb,var(--board-effect) 42%,transparent);backdrop-filter:blur(7px)}
+.slide-video-status{position:absolute;z-index:4;right:clamp(5px,1.2cqw,10px);bottom:clamp(5px,1.2cqh,10px);left:clamp(5px,1.2cqw,10px);display:grid;gap:4px;padding:5px 8px;border:1px solid #ffffff30;border-radius:8px;background:#02050ac7;box-shadow:0 5px 18px #0009;color:#fff;backdrop-filter:blur(8px)}.slide-video-status>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:8px}.slide-video-status strong{font-size:clamp(.48rem,1.8cqw,.66rem);letter-spacing:.08em}.slide-video-status span{font-size:clamp(.46rem,1.7cqw,.64rem);font-variant-numeric:tabular-nums}.slide-video-track{height:3px;border-radius:99px;background:#ffffff2b;overflow:hidden}.slide-video-track i{display:block;height:100%;border-radius:inherit;background:#48ff9a;box-shadow:0 0 8px #48ff9a}
+.slide-canvas.has-video .slide-live-timer{top:42%}.widget.widget-slide-compact .slide-video-status{gap:2px;padding:3px 5px}.widget.widget-slide-compact .slide-video-track{height:2px}
+
 /* Every widget can give its title row back to its content. */
 .widget.widget-title-hidden{--widget-heading-height:0px}
 .widget.widget-title-hidden .widget-heading{display:none}
