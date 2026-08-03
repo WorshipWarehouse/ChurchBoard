@@ -490,6 +490,59 @@ class RuntimeAssignmentTests(unittest.TestCase):
         matched = RuntimeService._match_presentation_item("GREAT—I AM!", items, "3", {"songs_only": True, "match_mode": "exact"})
         self.assertEqual(matched["id"], "4")
 
+    def test_active_plan_detail_refreshes_between_catalog_scans(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "state.json")
+            data = store.load()
+            data["settings"]["demo_mode"] = False
+            data["settings"]["planning_center"].update({
+                "enabled": True,
+                "application_id": "app",
+                "secret": "secret",
+                "refresh_seconds": 60,
+                "detail_refresh_seconds": 5,
+            })
+            store.save(data)
+            runtime = RuntimeService(store)
+            old_service = {
+                "id": "plan",
+                "service_type_id": "type",
+                "starts_at": "2099-01-01T12:00:00+00:00",
+                "items": [{"id": "welcome", "title": "Welcome", "length": 60}],
+                "people": [],
+            }
+            new_service = {
+                **old_service,
+                "items": [
+                    *old_service["items"],
+                    {"id": "new-song", "title": "Lord I Lift Your Name On High", "length": 197},
+                ],
+            }
+            runtime.state = {"service": old_service, "people": [], "plans": [old_service]}
+            runtime._last_refresh["planning_center"] = 100
+            runtime._last_refresh["planning_center_detail"] = 100
+
+            class FakePlanningCenterClient:
+                configured = True
+
+                def __init__(self, _settings):
+                    pass
+
+                async def plan_detail(self, plan):
+                    self.plan = plan
+                    return new_service
+
+            async def refresh_twice():
+                await runtime.refresh()
+                await asyncio.sleep(0)
+                return await runtime.refresh()
+
+            with patch("app.services.runtime.PlanningCenterClient", FakePlanningCenterClient), patch("app.services.runtime.time.monotonic", return_value=106):
+                state = asyncio.run(refresh_twice())
+
+            self.assertEqual([item["id"] for item in state["service"]["items"]], ["welcome", "new-song"])
+            self.assertEqual([item["id"] for item in state["timing"]["service_items"]], ["welcome", "new-song"])
+
 
 class ProPresenterLiveSyncTests(unittest.IsolatedAsyncioTestCase):
     async def test_stable_presentation_takes_control_and_advances_live(self):

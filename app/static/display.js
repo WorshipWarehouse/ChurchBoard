@@ -100,12 +100,14 @@ function fitOrderService(root=document){
     rows.forEach(row=>row.classList.remove("order-hidden"));
     const foundActive=rows.findIndex(row=>row.classList.contains("active")),activeIndex=foundActive>=0?foundActive:0,heights=rows.map(row=>Math.ceil(row.getBoundingClientRect().height)),available=Math.max(0,list.clientHeight-2),priority=[];
     priority.push(activeIndex);
-    for(let offset=1;offset<=3;offset++)if(activeIndex+offset<rows.length)priority.push(activeIndex+offset);
+    let upcomingItems=0;
+    for(let index=activeIndex+1;index<rows.length&&upcomingItems<3;index++)if(!rows[index].classList.contains("order-header")){priority.push(index);upcomingItems++}
+    for(let index=activeIndex+1;index<rows.length;index++)if(rows[index].classList.contains("order-header"))priority.push(index);
     for(let offset=1;offset<=2;offset++)if(activeIndex-offset>=0)priority.push(activeIndex-offset);
-    for(let offset=4;activeIndex+offset<rows.length;offset++)priority.push(activeIndex+offset);
+    for(let offset=1;activeIndex+offset<rows.length;offset++)priority.push(activeIndex+offset);
     for(let offset=3;activeIndex-offset>=0;offset++)priority.push(activeIndex-offset);
     const visible=new Set();let used=0;
-    for(const index of priority){const height=heights[index];if(!visible.size||used+height<=available){visible.add(index);used+=height}}
+    for(const index of priority){if(visible.has(index))continue;const height=heights[index];if(!visible.size||used+height<=available){visible.add(index);used+=height}}
     rows.forEach((row,index)=>row.classList.toggle("order-hidden",!visible.has(index)));list.scrollTop=0;
   });
 }

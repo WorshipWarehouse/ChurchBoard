@@ -40,6 +40,7 @@ def default_data() -> dict[str, Any]:
                 "open_hours_before": 3,
                 "close_hours_after": 3,
                 "refresh_seconds": 60,
+                "detail_refresh_seconds": 5,
                 "live_from_propresenter": {
                     "enabled": False,
                     "auto_take_control": True,

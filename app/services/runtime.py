@@ -21,7 +21,7 @@ class RuntimeService:
         self.state: dict[str, Any] = self.demo_state()
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
-        self._last_refresh = {"planning_center": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0}
+        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0}
         self._service_control: dict[str, Any] = {"active": False}
         self._pp_live_candidate = ""
         self._pp_live_candidate_since = 0.0
@@ -30,6 +30,7 @@ class RuntimeService:
         self._rehearsal_clock: dict[str, Any] = {}
         self._propresenter_client: ProPresenterClient | None = None
         self._propresenter_key: tuple[Any, ...] | None = None
+        self._planning_center_detail_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         self._stop.clear()
@@ -46,6 +47,13 @@ class RuntimeService:
         if self._propresenter_client is not None:
             await self._propresenter_client.close()
             self._propresenter_client = None
+        if self._planning_center_detail_task is not None:
+            self._planning_center_detail_task.cancel()
+            try:
+                await self._planning_center_detail_task
+            except asyncio.CancelledError:
+                pass
+            self._planning_center_detail_task = None
 
     async def _run(self) -> None:
         while not self._stop.is_set():
@@ -130,9 +138,32 @@ class RuntimeService:
         # Planning Center refresh cannot hold up the local ProPresenter view.
         self.state = deepcopy(next_state)
         pc = PlanningCenterClient(config.get("planning_center", {}))
-        pc_due = clock - self._last_refresh["planning_center"] >= float(config.get("planning_center", {}).get("refresh_seconds", 60))
+        if self._planning_center_detail_task is not None and self._planning_center_detail_task.done():
+            try:
+                detail = self._planning_center_detail_task.result()
+                if str(detail.get("id") or "") == str((next_state.get("service") or {}).get("id") or ""):
+                    next_state.update({
+                        "service": detail,
+                        "people": detail.get("people", []),
+                        "planning_center": {"connected": True, "error": ""},
+                    })
+                    next_state["timing"] = calculate_timing(detail)
+            except Exception as exc:
+                next_state["planning_center"] = {"connected": False, "error": str(exc)}
+            finally:
+                self._planning_center_detail_task = None
+        planning_center_settings = config.get("planning_center", {})
+        pc_due = clock - self._last_refresh["planning_center"] >= float(planning_center_settings.get("refresh_seconds", 60))
+        detail_due = clock - self._last_refresh["planning_center_detail"] >= max(
+            2.0,
+            float(planning_center_settings.get("detail_refresh_seconds", 5)),
+        )
         if pc.configured and (force or pc_due):
+            if self._planning_center_detail_task is not None:
+                self._planning_center_detail_task.cancel()
+                self._planning_center_detail_task = None
             self._last_refresh["planning_center"] = clock
+            self._last_refresh["planning_center_detail"] = clock
             try:
                 candidates = await pc.candidate_plans()
                 active = pc.select_plan(candidates, config.get("manual_plan"))
@@ -155,6 +186,16 @@ class RuntimeService:
                 }
             except Exception as exc:
                 next_state["planning_center"] = {"connected": False, "error": str(exc)}
+        elif pc.configured and detail_due and (next_state.get("service") or {}).get("id"):
+            # The plan catalog is relatively expensive to scan, but an active
+            # plan is commonly edited during rehearsal. Refresh just that
+            # plan's people and items frequently so additions appear quickly
+            # without re-fetching every candidate plan and service time.
+            if self._planning_center_detail_task is None:
+                self._last_refresh["planning_center_detail"] = clock
+                self._planning_center_detail_task = asyncio.create_task(
+                    pc.plan_detail(deepcopy(next_state["service"]))
+                )
         if live_config.get("enabled"):
             self._apply_cached_live_timing(next_state)
         if live_config.get("enabled"):
@@ -708,6 +749,7 @@ class RuntimeService:
             {"id": "3", "name": "Taylor Brooks", "position": "Worship Leader", "position_key": "band::worship leader", "team_id": "band", "team_name": "Band", "photo": "/static/demo-people/taylor-brooks.jpg", "status": "Confirmed"},
         ]
         items = [
+            {"id": "service-header", "title": "Service", "item_type": "header", "length": 0, "starts_after": 0, "notes": []},
             {"id": "1", "title": "Welcome", "length": 180, "starts_after": 0, "notes": [], "leader": "Morgan Reed"},
             {"id": "2", "title": "Worship", "length": 1200, "starts_after": 180, "notes": [], "leader": "Jordan Lee"},
             {"id": "3", "title": "Message", "length": 2100, "starts_after": 1380, "notes": []},
