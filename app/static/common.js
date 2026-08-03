@@ -33,8 +33,10 @@ const slidePreview = (slide,label,{notes=false,mode="image",showLabel=true}={}) 
   const timer=mode==="image"&&slide.timer_text?`<div class="slide-live-timer" data-fit-widget-text>${escapeHtml(slide.timer_text)}</div>`:"";
   const media=slide.media||{},video=mode==="image"&&media.is_playing&&!media.audio_only,position=Math.max(0,Number(media.position)||0),duration=Math.max(0,Number(media.duration)||0),progress=duration?Math.min(100,position/duration*100):0;
   const videoStatus=video?`<div class="slide-video-status"><div><strong>VIDEO · PLAYING</strong><span>${duration?`${formatMediaTime(position)} / ${formatMediaTime(duration)}`:"Live playback"}</span></div>${duration?`<div class="slide-video-track"><i style="width:${progress}%"></i></div>`:""}</div>`:"";
-  return `<div class="slide ${label==="Now"?"current":""} mode-${mode}">${showLabel?`<div class="slide-label">${label}</div>`:""}<div class="slide-canvas ${video?"has-video":""}"><div class="slide-text" data-fit-slide>${escapeHtml(slide.text||"No active slide")}</div>${image}${timer}${videoStatus}</div>${notes&&slide.notes?`<div class="slide-notes">${escapeHtml(slide.notes)}</div>`:""}</div>`;
+  const displayText=mode==="text"&&slide.timer_text?replaceSlideTimer(slide.text,slide.timer_text):(slide.text||"No active slide");
+  return `<div class="slide ${label==="Now"?"current":""} mode-${mode}">${showLabel?`<div class="slide-label">${label}</div>`:""}<div class="slide-canvas ${video?"has-video":""}"><div class="slide-text" data-fit-slide>${escapeHtml(displayText)}</div>${image}${timer}${videoStatus}</div>${notes&&slide.notes?`<div class="slide-notes">${escapeHtml(slide.notes)}</div>`:""}</div>`;
 };
+const replaceSlideTimer = (text,timer) => String(text||"").split(/\r?\n/).map(line=>/^\s*-?\d{1,3}:\d{2}(?::\d{2})?(?:\.\d{1,2})?\s*$/.test(line)?timer:line).join("\n")||timer;
 const formatMediaTime = seconds => {const value=Math.max(0,Math.round(Number(seconds)||0));return`${Math.floor(value/60)}:${String(value%60).padStart(2,"0")}`};
 const micIsActive = mic => mic.online===true&&Number.isFinite(Number(mic.battery_percent));
 const micHealth = mic => !micIsActive(mic)||Number(mic.battery_percent)<5?"critical":Number(mic.battery_percent)<=10?"low":"healthy";

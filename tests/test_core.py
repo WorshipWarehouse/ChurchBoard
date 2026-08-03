@@ -928,7 +928,7 @@ class ProPresenterTests(unittest.TestCase):
         self.assertEqual(ProPresenterClient._countdown_text("-00:00:02.00"), "-00:00:02.00")
         self.assertEqual(ProPresenterClient._countdown_text("John 3:16"), "")
 
-    def test_video_transport_status_includes_progress_and_countdown(self):
+    def test_video_transport_status_includes_progress(self):
         class Response:
             is_success = True
 
@@ -941,11 +941,32 @@ class ProPresenterTests(unittest.TestCase):
         status = ProPresenterClient._transport_status(
             Response({"is_playing": True, "uuid": "VIDEO-1", "name": "Countdown", "audio_only": False, "duration": 300}),
             Response(42.5),
-            Response("00:04:17"),
         )
         self.assertEqual(status["media"]["position"], 42.5)
         self.assertEqual(status["media"]["duration"], 300)
-        self.assertEqual(status["video_countdown"], "00:04:17")
+
+    def test_timer_element_uses_running_propresenter_timer(self):
+        timers = [
+            {"name": "PreShow Countdown", "time": "05:00:00", "state": "stopped"},
+            {"name": "Segment Countdown", "time": "00:04:17", "state": "running"},
+        ]
+        value = ProPresenterClient._timer_for_slide(
+            timers,
+            "754:56",
+            "Countdown",
+            {"label": "Pre-Service 5:00"},
+        )
+        self.assertEqual(value, "00:04:17")
+
+    def test_video_remaining_time_is_not_a_lyric_timer(self):
+        timers = [{"name": "Segment Countdown", "time": "00:04:17", "state": "running"}]
+        value = ProPresenterClient._timer_for_slide(
+            timers,
+            "Lord I lift Your name on high\nLord I love to sing Your praises",
+            "Lord I Lift Your Name On High",
+            {"label": "Verse"},
+        )
+        self.assertEqual(value, "")
 
 
 class ProPresenterPollingTests(unittest.IsolatedAsyncioTestCase):

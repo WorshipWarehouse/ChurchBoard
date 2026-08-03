@@ -86,15 +86,25 @@ class ProPresenterClient:
             transport_responses = await asyncio.gather(
                 self._http().get(f"{base}/v1/transport/presentation/current"),
                 self._http().get(f"{base}/v1/transport/presentation/time"),
-                self._http().get(f"{base}/v1/timer/video_countdown"),
+                self._http().get(f"{base}/v1/timers/current"),
                 return_exceptions=True,
             )
             self._transport_refreshed = clock
-            self._transport_payload = self._transport_status(*transport_responses)
+            self._transport_payload = {
+                **self._transport_status(*transport_responses[:2]),
+                "timers": self._timer_status(transport_responses[2]),
+            }
         media = self._transport_payload.get("media") or {}
-        current_timer = self._countdown_text(current_result.get("text"))
-        if not current_timer and media.get("is_playing") and not media.get("audio_only"):
-            current_timer = self._countdown_text(self._transport_payload.get("video_countdown"))
+        current_timer = self._timer_for_slide(
+            self._transport_payload.get("timers") or [],
+            current_result.get("text"),
+            self._presentation_title(presentation),
+            current_details,
+        )
+        # Presentation-layer transport also reports looping motion backgrounds.
+        # Treat it as foreground video only when the cue has no lyric text, or
+        # when the cue is a real timer slide.
+        visible_media = media if current_timer or not str(current_result.get("text") or "").strip() else {}
         current_result.update({
             "part": current_entry.get("part", ""),
             "color": current_entry.get("color", ""),
@@ -103,7 +113,7 @@ class ProPresenterClient:
             "image_url": self._thumbnail_url(presentation_uuid, current_position, current_result["image_uuid"])
             if current_result["image_uuid"] or current_details else "",
             "timer_text": current_timer,
-            "media": media,
+            "media": visible_media,
         })
         next_result.update({
             "part": next_entry.get("part", ""),
@@ -163,7 +173,7 @@ class ProPresenterClient:
         return next((line for line in reversed(lines) if re.fullmatch(pattern, line)), "")
 
     @staticmethod
-    def _transport_status(current: Any, position: Any, video_countdown: Any) -> dict[str, Any]:
+    def _transport_status(current: Any, position: Any) -> dict[str, Any]:
         def payload(response: Any) -> Any:
             if isinstance(response, Exception) or not getattr(response, "is_success", False):
                 return None
@@ -174,7 +184,6 @@ class ProPresenterClient:
 
         media_raw = payload(current)
         position_raw = payload(position)
-        countdown_raw = payload(video_countdown)
         media = {}
         if isinstance(media_raw, dict) and (media_raw.get("uuid") or media_raw.get("is_playing")):
             try:
@@ -193,7 +202,56 @@ class ProPresenterClient:
                 "position": current_time,
                 "duration": duration,
             }
-        return {"media": media, "video_countdown": str(countdown_raw or "")}
+        return {"media": media}
+
+    @staticmethod
+    def _timer_status(response: Any) -> list[dict[str, str]]:
+        if isinstance(response, Exception) or not getattr(response, "is_success", False):
+            return []
+        try:
+            raw = response.json()
+        except Exception:
+            return []
+        if not isinstance(raw, list):
+            return []
+        timers = []
+        for row in raw:
+            if not isinstance(row, dict):
+                continue
+            identifier = row.get("id") if isinstance(row.get("id"), dict) else {}
+            timers.append({
+                "uuid": str(identifier.get("uuid") or ""),
+                "name": str(identifier.get("name") or ""),
+                "time": str(row.get("time") or ""),
+                "state": str(row.get("state") or "").casefold(),
+            })
+        return timers
+
+    @classmethod
+    def _timer_for_slide(cls, timers: list[dict[str, str]], text: Any, title: str, cue: Any) -> str:
+        # ProPresenter returns the timer element's design-time placeholder (for
+        # example 754:56) as slide text. Only replace that placeholder when an
+        # actual ProPresenter timer is active. Video remaining time is not a
+        # slide timer and must never be used here.
+        if not cls._countdown_text(text):
+            return ""
+        active_states = {"running", "complete", "overrunning", "overran", "overrun"}
+        active = [row for row in timers if row.get("state") in active_states and cls._countdown_text(row.get("time"))]
+        if not active:
+            return ""
+
+        context_parts = [title]
+        if isinstance(cue, dict):
+            context_parts.extend(str(cue.get(key) or "") for key in ("label", "name", "notes"))
+        context = set(re.findall(r"[a-z0-9]+", " ".join(context_parts).casefold()))
+
+        def score(row: dict[str, str]) -> tuple[int, int]:
+            name = set(re.findall(r"[a-z0-9]+", row.get("name", "").casefold()))
+            state_priority = 2 if row.get("state") in {"running", "overrunning", "overran", "overrun"} else 1
+            return len(context & name), state_priority
+
+        selected = max(active, key=score)
+        return cls._countdown_text(selected.get("time"))
 
     @staticmethod
     def _index(raw: Any) -> int:
