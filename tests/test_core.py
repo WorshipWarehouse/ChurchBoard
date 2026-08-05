@@ -24,6 +24,7 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(store.load()["dashboards"][2]["widgets"][3]["settings"]["display_mode"], "technical")
             self.assertFalse(store.load()["dashboards"][0]["widgets"][3]["settings"]["use_planning_center_icon"])
             self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["unassigned_media_title"], "Icon")
+            self.assertEqual(store.load()["dashboards"][0]["widgets"][5]["settings"]["display_mode"], "current")
             self.assertEqual(store.load()["dashboards"][0]["background_color"], "#0a0d12")
             slides = store.load()["dashboards"][0]["widgets"][4]["settings"]
             self.assertEqual(slides["slide_layout"], "full")
@@ -51,6 +52,14 @@ class StoreTests(unittest.TestCase):
             widget = store.load()["dashboards"][0]["widgets"][3]
             self.assertEqual(widget["type"], "assignments")
             self.assertEqual(widget["title"], "Scheduled Positions & Mics")
+
+    def test_order_widget_migrates_to_current_display_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "state.json")
+            data = store.load()
+            data["dashboards"][0]["widgets"][5]["settings"].pop("display_mode")
+            store.save(data)
+            self.assertEqual(store.load()["dashboards"][0]["widgets"][5]["settings"]["display_mode"], "current")
 
     def test_public_settings_never_returns_secret(self):
         with tempfile.TemporaryDirectory() as directory:
