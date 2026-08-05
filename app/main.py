@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from copy import deepcopy
+from datetime import datetime, timezone
 from hashlib import sha256
 import ipaddress
 import json
@@ -11,13 +12,14 @@ from zoneinfo import available_timezones
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.config import ROOT_DIR, load_config
 from app.models import Dashboard, SettingsUpdate
 from app.services.runtime import RuntimeService
+from app.services.spl_reports import SPLReportStore
 from app.services.planning_center import PlanningCenterClient
 from app.services.propresenter import ProPresenterClient
 from app.store import ConfigStore
@@ -30,11 +32,29 @@ class ActivePlanRequest(BaseModel):
     service_type_id: str | None = None
 
 
+class OSMMeasurement(BaseModel):
+    laeq: float | None = None
+    lceq: float | None = None
+    lzeq: float | None = None
+    peak: float | None = None
+    fast: float | None = None
+    slow: float | None = None
+    a_fast: float | None = None
+    a_slow: float | None = None
+    b_fast: float | None = None
+    b_slow: float | None = None
+    c_fast: float | None = None
+    c_slow: float | None = None
+    z_fast: float | None = None
+    z_slow: float | None = None
+    timestamp: str | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = load_config()
     store = ConfigStore(config.data_file)
-    runtime = RuntimeService(store)
+    runtime = RuntimeService(store, SPLReportStore(config.data_file.with_name("spl-samples.jsonl")))
     app.state.instance_id = uuid4().hex
     app.state.store = store
     app.state.runtime = runtime
@@ -180,6 +200,7 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
             "propresenter",
             "planning_center_live",
             "service_control",
+            "osm",
         )
     }
     encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
@@ -187,6 +208,50 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers={"ETag": etag})
     return Response(encoded, media_type="application/json", headers={"ETag": etag})
+
+
+@app.post("/api/integrations/osm/measurement", status_code=202)
+async def ingest_osm_measurement(payload: OSMMeasurement, request: Request) -> dict:
+    measurement = payload.model_dump(exclude_none=True)
+    if not any(key in measurement for key in ("laeq", "lceq", "lzeq", "peak", "fast", "slow", "a_fast", "a_slow", "b_fast", "b_slow", "c_fast", "c_slow", "z_fast", "z_slow")):
+        raise HTTPException(400, "Measurement does not contain an SPL level")
+    runtime = request.app.state.runtime
+    runtime.record_spl_measurement(measurement)
+    runtime.state["osm"] = {"connected": True, "last_measurement_at": measurement.get("timestamp"), **measurement}
+    return {"accepted": True}
+
+
+@app.post("/api/integrations/osm/test")
+async def test_osm_connection(request: Request) -> dict:
+    settings = store_from(request).load()["settings"].get("open_sound_meter", {})
+    if not settings.get("enabled"):
+        raise HTTPException(400, "Enable Open Sound Meter monitoring and save settings first")
+    osm = request.app.state.runtime.state.get("osm") or {}
+    timestamp = str(osm.get("last_measurement_at") or "")
+    try:
+        age = max(0, (datetime.now(timezone.utc) - datetime.fromisoformat(timestamp.replace("Z", "+00:00"))).total_seconds())
+    except ValueError:
+        age = None
+    if osm.get("connected") and age is not None and age <= 3:
+        return {"connected": True, "age_seconds": round(age, 1), "message": f"Receiving OSM levels · A Fast {float(osm.get('a_fast', osm.get('laeq'))):.1f} dBA"}
+    return {"connected": False, "message": "No recent valid OSM level packet. Confirm OSM Remote API Server and multicast network access."}
+
+
+@app.get("/api/reports/services")
+async def list_spl_report_services(request: Request) -> dict:
+    return {"items": request.app.state.runtime.spl_reports.services()}
+
+
+@app.get("/api/reports/services/{service_id}/spl-averages.csv")
+async def download_spl_averages(service_id: str, request: Request) -> PlainTextResponse:
+    content = request.app.state.runtime.spl_reports.csv(service_id)
+    return PlainTextResponse(content, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="churchboard-{service_id}-spl-averages.csv"'})
+
+
+@app.get("/api/reports/services/{service_id}/spl-graph.html")
+async def download_spl_graph(service_id: str, request: Request) -> Response:
+    content = request.app.state.runtime.spl_reports.graph_html(service_id)
+    return Response(content, media_type="text/html", headers={"Content-Disposition": f'attachment; filename="churchboard-{service_id}-spl-graph.html"'})
 
 
 @app.get("/api/app-info")

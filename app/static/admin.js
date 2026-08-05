@@ -61,12 +61,12 @@ async function loadPositionCatalog(){
 
 async function loadSettings(){
   settings=await api("/api/settings");
-  const pc=settings.planning_center||{},pp=settings.propresenter||{},sh=settings.shure||{},live=pc.live_from_propresenter||{};
+  const pc=settings.planning_center||{},pp=settings.propresenter||{},sh=settings.shure||{},osm=settings.open_sound_meter||{},live=pc.live_from_propresenter||{};
   serviceTypeRows=pc.service_types||[];
   try{const runtime=await api("/api/runtime"),service=runtime.service||{},id=String(service.service_type_id||""),liveStatus=runtime.planning_center_live||{};if(id&&service.service_type_name&&!serviceTypeRows.some(item=>String(item.id)===id))serviceTypeRows.push({id,name:service.service_type_name});document.querySelector("#pp-live-status").textContent=liveStatus.message||""}catch(error){}
   sf.organization_name.value=settings.organization_name||"";await loadTimezoneOptions(settings.timezone||"America/New_York");sf.demo_mode.checked=!!settings.demo_mode;
   sf.pc_enabled.checked=!!pc.enabled;sf.pc_application_id.value=pc.application_id||"";sf.pc_days.value=pc.open_days_before??2;sf.pc_hours.value=pc.open_hours_before??3;sf.pc_close.value=pc.close_hours_after??3;
-  sf.pp_enabled.checked=!!pp.enabled;sf.pp_host.value=pp.host||"127.0.0.1";sf.pp_port.value=pp.port||50001;sf.shure_enabled.checked=!!sh.enabled;
+  sf.pp_enabled.checked=!!pp.enabled;sf.pp_host.value=pp.host||"127.0.0.1";sf.pp_port.value=pp.port||50001;sf.shure_enabled.checked=!!sh.enabled;sf.osm_enabled.checked=!!osm.enabled;sf.osm_reports_enabled.checked=osm.reports_enabled!==false;sf.osm_report_weighting.value=osm.report_weighting||"A";sf.osm_report_response.value=osm.report_response||"Fast";try{const runtime=await api("/api/runtime"),latest=runtime.osm||{},sources=latest.sources||[];sf.osm_source_id.innerHTML='<option value="">First detected source</option>'+sources.map(source=>`<option value="${escapeHtml(source.id)}">${escapeHtml(source.name)}${source.host?` · ${escapeHtml(source.host)}`:""}${Number.isFinite(Number(source.level))?` · ${Number(source.level).toFixed(1)} dB`:""}</option>`).join("");sf.osm_source_id.value=osm.source_id||"";document.querySelector("#osm-status").textContent=latest.connected?`Connected to ${latest.source_name||"OSM source"} · A Fast ${Number(latest.a_fast||latest.laeq).toFixed(1)} dB`:"Waiting for OSM multicast data."}catch(error){}
   sf.pp_live_enabled.checked=!!live.enabled;sf.pp_live_take_control.checked=live.auto_take_control!==false;sf.pp_live_songs_only.checked=live.songs_only!==false;sf.pp_live_allow_previous.checked=!!live.allow_previous;sf.pp_live_match_mode.value=live.match_mode||"exact";sf.pp_live_stable_seconds.value=Number(live.stable_seconds??2);
   document.querySelector("#pc-status").textContent=pc.secret_configured?"Token saved; connection not yet tested":"";
   renderServiceTypes();hydrateMics(sh);await loadPositionCatalog();
@@ -81,7 +81,7 @@ function settingsPayload(){
   return {...settings,organization_name:sf.organization_name.value,timezone:sf.timezone.value,demo_mode:sf.demo_mode.checked,
     planning_center:{...pcBase,enabled:sf.pc_enabled.checked,application_id:sf.pc_application_id.value,secret:sf.pc_secret.value,service_type_ids:serviceTypeIds,service_types:serviceTypeRows,open_days_before:Number(sf.pc_days.value),open_hours_before:Number(sf.pc_hours.value),close_hours_after:Number(sf.pc_close.value),live_from_propresenter:{...(pcBase.live_from_propresenter||{}),enabled:sf.pp_live_enabled.checked,auto_take_control:sf.pp_live_take_control.checked,songs_only:sf.pp_live_songs_only.checked,allow_previous:sf.pp_live_allow_previous.checked,match_mode:sf.pp_live_match_mode.value,stable_seconds:Math.max(0,Number(sf.pp_live_stable_seconds.value)||0)}},
     propresenter:{...(settings.propresenter||{}),enabled:sf.pp_enabled.checked,host:sf.pp_host.value,port:Number(sf.pp_port.value)},
-    shure:{...(settings.shure||{}),enabled:sf.shure_enabled.checked,receivers:[],mics:micRows.map(mic=>({...mic,name:String(mic.name).trim(),host:String(mic.host).trim(),port:Number(mic.port)||2202,channel:Number(mic.channel)||1}))},position_mic_map:micMap};
+    shure:{...(settings.shure||{}),enabled:sf.shure_enabled.checked,receivers:[],mics:micRows.map(mic=>({...mic,name:String(mic.name).trim(),host:String(mic.host).trim(),port:Number(mic.port)||2202,channel:Number(mic.channel)||1}))},open_sound_meter:{...(settings.open_sound_meter||{}),enabled:sf.osm_enabled.checked,reports_enabled:sf.osm_reports_enabled.checked,report_weighting:sf.osm_report_weighting.value,report_response:sf.osm_report_response.value,source_id:sf.osm_source_id.value},position_mic_map:micMap};
 }
 
 async function saveSettings(showStatus=true){
@@ -111,4 +111,5 @@ document.querySelector("#new-dashboard").onclick=()=>dialog.showModal();
 dialog.querySelector("[name=name]").addEventListener("input",e=>{dialog.querySelector("[name=slug]").value=e.target.value.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")});
 document.querySelector("#create-dashboard").addEventListener("click",async event=>{event.preventDefault();const name=dialog.querySelector("[name=name]").value.trim(),slug=dialog.querySelector("[name=slug]").value.trim();if(!name||!slug)return;try{await api("/api/dashboards",{method:"POST",body:JSON.stringify({id:slug,name,slug,background_color:"#0a0d12",columns:12,row_height:72,widgets:[]})});dialog.close();location.href=`/editor/${encodeURIComponent(slug)}`}catch(error){alert(error.message)}});
 
+document.querySelector("#osm-test").addEventListener("click",async()=>{const status=document.querySelector("#osm-status");status.textContent="Checking OSM multicast…";try{await saveSettings(false);const result=await api("/api/integrations/osm/test",{method:"POST"});status.textContent=result.message}catch(error){status.textContent=error.message}});
 loadDashboards();loadSettings();
