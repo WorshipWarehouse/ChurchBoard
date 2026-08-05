@@ -12,12 +12,15 @@ from typing import Any
 from app.services.planning_center import PlanningCenterClient, calculate_timing, parse_time, service_items
 from app.services.propresenter import ProPresenterClient
 from app.services.shure import ShureClient
+from app.services.spl_reports import SPLReportStore
+from app.services.osm import OSMListener
 from app.store import ConfigStore
 
 
 class RuntimeService:
-    def __init__(self, store: ConfigStore):
+    def __init__(self, store: ConfigStore, spl_reports: SPLReportStore | None = None):
         self.store = store
+        self.spl_reports = spl_reports or SPLReportStore(store.path.with_name("spl-samples.jsonl"))
         self.state: dict[str, Any] = self.demo_state()
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
@@ -31,6 +34,60 @@ class RuntimeService:
         self._propresenter_client: ProPresenterClient | None = None
         self._propresenter_key: tuple[Any, ...] | None = None
         self._planning_center_detail_task: asyncio.Task | None = None
+        self._osm_listener = OSMListener(self.record_osm_measurement)
+        self._osm_sources: dict[str, dict[str, Any]] = {}
+        self._osm_auto_source_key = ""
+
+    def record_spl_measurement(self, measurement: dict[str, Any], metric_key: str = "a_fast", metric_label: str = "A-weighted Fast") -> None:
+        """Persist a normalized bridge reading against the current LIVE item."""
+        state = self.state
+        self.spl_reports.record(measurement, state.get("service") or {}, (state.get("timing") or {}).get("current_item"), metric_key, metric_label)
+
+    def record_osm_measurement(self, measurement: dict[str, Any]) -> None:
+        osm_settings = self.store.load()["settings"].get("open_sound_meter", {})
+        reports_enabled = bool(osm_settings.get("reports_enabled", True))
+        weighting = str(osm_settings.get("report_weighting") or "A").upper()
+        response = str(osm_settings.get("report_response") or "Fast").capitalize()
+        if weighting not in {"A", "B", "C", "Z"}:
+            weighting = "A"
+        if response not in {"Fast", "Slow"}:
+            response = "Fast"
+        metric_key = f"{weighting.lower()}_{response.lower()}"
+        metric_label = f"{weighting}-weighted {response}"
+        source_id = str(measurement.get("source_id") or "")
+        source_host = str(measurement.get("source_host") or "")
+        source_key = f"{source_host}:{source_id}" if source_host else source_id
+        if not source_key:
+            source_key = "legacy"
+        self._osm_sources[source_key] = {**measurement, "source_key": source_key}
+        configured_source = str(osm_settings.get("source_id") or "")
+        if not self._osm_auto_source_key:
+            self._osm_auto_source_key = source_key
+        selected_key = configured_source or self._osm_auto_source_key
+        selected = self._osm_sources.get(selected_key)
+        if selected is None:
+            current = self.state.get("osm") or {}
+            self.state["osm"] = {**current, "connected": False, "message": "The selected OSM source is not currently sending levels", "sources": self._osm_source_catalog(metric_key), "selected_source_id": selected_key}
+            return
+        if source_key != selected["source_key"]:
+            current = self.state.get("osm") or {}
+            self.state["osm"] = {**current, "sources": self._osm_source_catalog(metric_key), "selected_source_id": selected["source_key"]}
+            return
+        if reports_enabled:
+            self.record_spl_measurement(selected, metric_key, metric_label)
+        self.state["osm"] = {"connected": True, "reports_enabled": reports_enabled, "report_metric_key": metric_key, "report_metric_label": metric_label, "selected_source_id": selected["source_key"], "sources": self._osm_source_catalog(metric_key), "last_measurement_at": selected.get("timestamp"), **selected}
+
+    def _osm_source_catalog(self, metric_key: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": source["source_key"],
+                "name": source.get("source_name") or source["source_key"],
+                "host": source.get("source_host") or "",
+                "level": source.get(metric_key),
+                "updated_at": source.get("timestamp"),
+            }
+            for source in self._osm_sources.values()
+        ]
 
     async def start(self) -> None:
         self._stop.clear()
@@ -54,6 +111,7 @@ class RuntimeService:
             except asyncio.CancelledError:
                 pass
             self._planning_center_detail_task = None
+        await self._osm_listener.close()
 
     async def _run(self) -> None:
         while not self._stop.is_set():
@@ -66,6 +124,24 @@ class RuntimeService:
     async def refresh(self, force: bool = False) -> dict[str, Any]:
         stored_data = self.store.load()
         config = stored_data["settings"]
+        osm_settings = config.get("open_sound_meter", {})
+        if osm_settings.get("enabled"):
+            try:
+                await self._osm_listener.configure(osm_settings)
+                self.state.setdefault("osm", {"connected": False, "message": "Waiting for OSM multicast data"})
+                osm_state = self.state.get("osm") or {}
+                last_measurement = str(osm_state.get("last_measurement_at") or "")
+                if osm_state.get("connected") and last_measurement:
+                    try:
+                        age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_measurement.replace("Z", "+00:00"))).total_seconds()
+                    except ValueError:
+                        age = 0
+                    if age > 3:
+                        self.state["osm"] = {**osm_state, "connected": False, "message": "The selected OSM source stopped sending levels"}
+            except OSError as exc:
+                self.state["osm"] = {"connected": False, "message": f"Could not join OSM multicast: {exc}"}
+        else:
+            await self._osm_listener.close()
         configured_media_titles = self._configured_media_titles(stored_data)
         if config.get("demo_mode"):
             demo = deepcopy(self.state) if self.state.get("service", {}).get("id") == "demo" else self.demo_state()
