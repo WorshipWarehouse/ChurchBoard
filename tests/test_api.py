@@ -56,6 +56,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn('class="unassigned-board-icon"', common_script)
         self.assertIn('settings.slide_layout==="previews_only"', common_script)
         self.assertIn('settings.show_title===false', common_script)
+        self.assertIn('full-service-order-list', common_script)
+        self.assertIn('order_display_mode', self.client.get("/static/editor.js").text)
         stylesheet = self.client.get("/static/style.css").text
         self.assertIn('mask:url("/static/churchboard-mark.svg")', stylesheet)
         mark = self.client.get("/static/churchboard-mark.svg")

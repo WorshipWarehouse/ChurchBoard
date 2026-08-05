@@ -15,7 +15,7 @@ DEFAULT_WIDGETS = [
     {"id": "timing", "type": "timing", "x": 8, "y": 0, "w": 4, "h": 2, "title": "Timing", "settings": {}},
     {"id": "assignments", "type": "assignments", "x": 0, "y": 2, "w": 7, "h": 6, "title": "Scheduled Positions & Mics", "settings": {"team_ids": [], "position_keys": [], "position_labels": {}, "positions": [], "display_mode": "photos", "use_planning_center_icon": False, "unassigned_media_title": "Icon"}},
     {"id": "slides", "type": "slides", "x": 7, "y": 2, "w": 5, "h": 4, "title": "ProPresenter", "settings": {"show_notes": True, "slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False}},
-    {"id": "order", "type": "order", "x": 7, "y": 6, "w": 5, "h": 2, "title": "Order of Service", "settings": {"limit": 6, "show_leader": False, "show_mic": False}},
+    {"id": "order", "type": "order", "x": 7, "y": 6, "w": 5, "h": 2, "title": "Order of Service", "settings": {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False}},
 ]
 
 
@@ -118,7 +118,7 @@ class ConfigStore:
                     if widget.get("type") == "slides":
                         widget["settings"] = {"slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False, "show_notes": True, **widget.get("settings", {})}
                     if widget.get("type") == "order":
-                        widget["settings"] = {"limit": 6, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
+                        widget["settings"] = {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
                     if widget.get("type") == "spl":
                         widget["settings"] = {"green_max": 75, "orange_max": 85, "reports_enabled": True, **widget.get("settings", {})}
             return baseline
