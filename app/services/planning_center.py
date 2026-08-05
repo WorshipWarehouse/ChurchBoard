@@ -94,6 +94,41 @@ def service_items(plan: dict[str, Any], service_time_id: str | None) -> list[dic
     return result
 
 
+def consolidate_people(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Combine a person's scheduled positions while retaining plan order.
+
+    Planning Center returns one PlanPerson per position.  The dashboard, mic
+    assignment, and item-leader features instead need a single representation
+    of that human, with every scheduled position available for lookup.
+    """
+    people: list[dict[str, Any]] = []
+    by_identity: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        person_id = str(row.get("person_id") or "").strip()
+        # A missing Person relationship must not merge unrelated unlinked
+        # PlanPerson rows merely because their display names happen to match.
+        identity = f"person:{person_id}" if person_id else f"plan-person:{row.get('id')}"
+        position = {
+            "name": str(row.get("position") or ""),
+            "key": str(row.get("position_key") or ""),
+            "team_id": str(row.get("team_id") or ""),
+            "team_name": str(row.get("team_name") or ""),
+        }
+        person = by_identity.get(identity)
+        if person is None:
+            person = {**row, "positions": [position], "position_keys": [position["key"]] if position["key"] else []}
+            by_identity[identity] = person
+            people.append(person)
+            continue
+        if position["key"] and position["key"] not in person["position_keys"]:
+            person["positions"].append(position)
+            person["position_keys"].append(position["key"])
+        for field in ("name", "photo", "status"):
+            if not person.get(field) and row.get(field):
+                person[field] = row[field]
+    return people
+
+
 class PlanningCenterClient:
     def __init__(self, settings: dict[str, Any]):
         self.settings = settings
@@ -308,6 +343,7 @@ class PlanningCenterClient:
                 "photo": person_attrs.get("photo_url") or attrs.get("photo_thumbnail") or person_attrs.get("photo_thumbnail_url") or "",
                 "status": attrs.get("status", ""),
             })
+        people = consolidate_people(people)
         people_by_person_id = {person["person_id"]: person for person in people if person["person_id"]}
         item_payload = await self._get(
             f"{prefix}/items",

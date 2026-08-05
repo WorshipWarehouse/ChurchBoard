@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from app.models import Dashboard
-from app.services.planning_center import PlanningCenterClient, calculate_timing, item_leader, position_key, selected_service_time, service_items
+from app.services.planning_center import PlanningCenterClient, calculate_timing, consolidate_people, item_leader, position_key, selected_service_time, service_items
 from app.services.shure import ShureClient, battery_percent, percent, transmitter_active
 from app.services.propresenter import ProPresenterClient
 from app.services.runtime import RuntimeService
@@ -76,6 +76,15 @@ class DashboardTests(unittest.TestCase):
 
 
 class PlanningCenterTests(unittest.TestCase):
+    def test_consolidate_people_keeps_one_person_and_all_positions_in_plan_order(self):
+        people = consolidate_people([
+            {"id": "plan-1", "person_id": "caleb", "name": "Caleb Hines", "position": "Acoustic Guitar", "position_key": "band::acoustic guitar", "team_id": "band", "team_name": "Band", "photo": "", "status": "C"},
+            {"id": "plan-2", "person_id": "caleb", "name": "Caleb Hines", "position": "Vocals", "position_key": "band::vocals", "team_id": "band", "team_name": "Band", "photo": "", "status": "C"},
+        ])
+        self.assertEqual(len(people), 1)
+        self.assertEqual([position["name"] for position in people[0]["positions"]], ["Acoustic Guitar", "Vocals"])
+        self.assertEqual(people[0]["position_keys"], ["band::acoustic guitar", "band::vocals"])
+
     def test_manual_plan_wins(self):
         client = PlanningCenterClient({"open_days_before": 0, "open_hours_before": 0, "close_hours_after": 0})
         plans = [{"id": "1", "service_type_id": "a", "starts_at": "2030-01-01T00:00:00+00:00"}, {"id": "2", "service_type_id": "b", "starts_at": "2030-01-02T00:00:00+00:00"}]
@@ -380,6 +389,13 @@ class RuntimeAssignmentTests(unittest.TestCase):
         }
         RuntimeService._apply_assignments(state, {"band::vox 1": "blue"})
         self.assertEqual(state["mics"][0]["assignment"]["name"], "Jordan Lee")
+
+    def test_each_position_mic_maps_to_the_same_consolidated_person(self):
+        person = {"person_id": "caleb", "name": "Caleb Hines", "position": "Acoustic Guitar", "position_key": "band::acoustic guitar", "position_keys": ["band::acoustic guitar", "band::vocals"], "positions": [{"name": "Acoustic Guitar", "key": "band::acoustic guitar"}, {"name": "Vocals", "key": "band::vocals"}]}
+        state = {"people": [person], "mics": [{"id": "instrument", "name": "Instrument"}, {"id": "vocal", "name": "Vocal"}]}
+        RuntimeService._apply_assignments(state, {"band::acoustic guitar": "instrument", "band::vocals": "vocal"})
+        self.assertEqual(state["mics"][0]["assignment"]["person_id"], "caleb")
+        self.assertEqual(state["mics"][1]["assignment"]["person_id"], "caleb")
 
     def test_unfilled_mapped_position_keeps_its_filter_key(self):
         state = {"people": [], "mics": [{"id": "blue", "name": "Blue"}]}

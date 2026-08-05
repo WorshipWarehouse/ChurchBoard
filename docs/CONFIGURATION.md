@@ -35,7 +35,7 @@ The service-type name and ID are saved together. If Planning Center temporarily 
 5. Drag positions into the desired display order.
 6. Save the dashboard.
 
-Every selected position appears even when no person or microphone is assigned. An open Planning Center position displays **Unassigned**.
+Every selected position appears even when no person or microphone is assigned. When one person holds multiple selected positions, ChurchBoard shows one entry with those positions together and lists every mapped microphone/equipment channel under that person. An open Planning Center position displays **Unassigned**.
 
 ## 3. Add Shure microphones
 
