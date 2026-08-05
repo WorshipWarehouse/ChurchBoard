@@ -6,11 +6,13 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import ipaddress
 import json
+import secrets
 import threading
 from uuid import uuid4
 from zoneinfo import available_timezones
 
 import uvicorn
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +24,7 @@ from app.services.runtime import RuntimeService
 from app.services.spl_reports import SPLReportStore
 from app.services.planning_center import PlanningCenterClient
 from app.services.propresenter import ProPresenterClient
+from app.services.restream import RestreamClient
 from app.store import ConfigStore
 from app.update import download_update, update_status
 from app.version import __version__
@@ -175,6 +178,10 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     existing_secret = data["settings"].get("planning_center", {}).get("secret", "")
     if not settings.get("planning_center", {}).get("secret"):
         settings.setdefault("planning_center", {})["secret"] = existing_secret
+    existing_restream = data["settings"].get("restream", {})
+    for secret_name in ("client_secret", "access_token", "refresh_token"):
+        if not settings.get("restream", {}).get(secret_name):
+            settings.setdefault("restream", {})[secret_name] = existing_restream.get(secret_name, "")
     data["settings"] = settings
     store.save(data)
     await request.app.state.runtime.refresh(force=True)
@@ -201,6 +208,7 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
             "planning_center_live",
             "service_control",
             "osm",
+            "restream",
         )
     }
     encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
@@ -342,6 +350,60 @@ async def test_planning_center(request: Request) -> dict:
     except Exception as exc:
         raise HTTPException(502, f"Planning Center connection failed: {exc}") from exc
     return {"connected": True, "items": service_types, "count": len(service_types)}
+
+
+@app.post("/api/integrations/restream/test")
+async def test_restream(request: Request) -> dict:
+    client = RestreamClient(store_from(request).load()["settings"].get("restream", {}))
+    try:
+        return await client.test_connection()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(exc.response.status_code, "Restream rejected the access token") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Restream connection failed: {exc}") from exc
+    finally:
+        await client.close()
+
+
+RESTREAM_CALLBACK_PATH = "/api/integrations/restream/callback"
+
+
+@app.get("/api/integrations/restream/connect")
+async def connect_restream(request: Request) -> RedirectResponse:
+    settings = store_from(request).load()["settings"].get("restream", {})
+    if not settings.get("client_id") or not settings.get("client_secret"):
+        raise HTTPException(400, "Save the Restream Client ID and Client Secret first")
+    state = secrets.token_urlsafe(32)
+    request.app.state.restream_oauth_state = state
+    callback = str(request.base_url).rstrip("/") + RESTREAM_CALLBACK_PATH
+    from urllib.parse import urlencode
+    query = urlencode({"response_type": "code", "client_id": settings["client_id"], "redirect_uri": callback, "state": state})
+    return RedirectResponse(f"https://api.restream.io/login?{query}")
+
+
+@app.get(RESTREAM_CALLBACK_PATH)
+async def restream_callback(request: Request, code: str = "", state: str = "") -> RedirectResponse:
+    expected_state = getattr(request.app.state, "restream_oauth_state", "")
+    request.app.state.restream_oauth_state = ""
+    if not code:
+        return RedirectResponse("/admin?restream=denied")
+    if not expected_state or not secrets.compare_digest(state, expected_state):
+        raise HTTPException(400, "Invalid Restream OAuth state; please try connecting again")
+    store = store_from(request)
+    data = store.load()
+    restream = data["settings"].get("restream", {})
+    client = RestreamClient(restream)
+    try:
+        token = await client.exchange_code(code, str(request.base_url).rstrip("/") + RESTREAM_CALLBACK_PATH)
+    except Exception as exc:
+        raise HTTPException(502, f"Restream authorization failed: {exc}") from exc
+    finally:
+        await client.close()
+    restream.update({"enabled": True, "access_token": token.get("access_token") or token.get("accessToken") or "", "refresh_token": token.get("refresh_token") or token.get("refreshToken") or "", "access_token_expires_at": token.get("expires") or token.get("accessTokenExpiresEpoch") or 0})
+    data["settings"]["restream"] = restream
+    store.save(data)
+    await request.app.state.runtime.refresh(force=True)
+    return RedirectResponse("/admin?restream=connected")
 
 
 @app.get("/api/integrations/planning-center/catalog")

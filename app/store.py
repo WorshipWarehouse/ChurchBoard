@@ -61,6 +61,7 @@ def default_data() -> dict[str, Any]:
                 "report_response": "Fast",
                 "source_id": "",
             },
+            "restream": {"enabled": False, "client_id": "", "client_secret": "", "access_token": "", "refresh_token": "", "access_token_expires_at": 0, "refresh_seconds": 5},
             "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
             "manual_plan": None,
         },
@@ -89,7 +90,7 @@ class ConfigStore:
             baseline = default_data()
             baseline.update(raw)
             baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
-            for section in ("planning_center", "propresenter", "shure", "open_sound_meter"):
+            for section in ("planning_center", "propresenter", "shure", "open_sound_meter", "restream"):
                 baseline["settings"][section] = {
                     **default_data()["settings"][section],
                     **raw.get("settings", {}).get(section, {}),
@@ -142,4 +143,10 @@ class ConfigStore:
         pc = settings.get("planning_center", {})
         pc["secret_configured"] = bool(pc.get("secret"))
         pc["secret"] = ""
+        restream = settings.get("restream", {})
+        restream["access_token_configured"] = bool(restream.get("access_token"))
+        restream["client_secret_configured"] = bool(restream.get("client_secret"))
+        restream["access_token"] = ""
+        restream["client_secret"] = ""
+        restream["refresh_token"] = ""
         return settings

@@ -76,6 +76,7 @@ function widgetStateKey(widget,state){
   if(widget.type==="order")return`order:${objectId(timing.service_items||service.items)}:${objectId(state.people)}:${JSON.stringify(leaderMicKey(state.mics))}:${String(timing.current_item?.id||"")}:${timing.service_time_id||""}:${settings.show_leader!==false}:${settings.show_mic!==false}`;
   if(widget.type==="people"||widget.type==="person")return`${widget.type}:${objectId(state.people)}`;
   if(widget.type==="controls")return`controls:${JSON.stringify([state.planning_center_live||{},state.service_control||{},timing.current_item?.id,timing.current_item?.title])}`;
+  if(widget.type==="restream")return`restream:${JSON.stringify(state.restream||{})}`;
   return`${widget.type}:${JSON.stringify(state)}`;
 }
 function fitOrderService(root=document){
