@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 from app.models import Dashboard
 from app.services.planning_center import PlanningCenterClient, calculate_timing, consolidate_people, item_leader, position_key, selected_service_time, service_items
 from app.services.shure import ShureClient, battery_percent, percent, transmitter_active
+from app.services.sennheiser import parse_ssc_response, ssc_request
 from app.services.propresenter import ProPresenterClient
 from app.services.restream import RestreamClient
 from app.services.runtime import RuntimeService
@@ -400,6 +401,24 @@ class ShureStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(mic["receiver_online"])
         self.assertEqual(mic["battery_percent"], 0)
         self.assertEqual(mic["errors"], ["Transmitter off"])
+
+
+class SennheiserTests(unittest.TestCase):
+    def test_ssc_request_queries_dashboard_telemetry(self):
+        request = ssc_request([1, 2])
+        self.assertIsNone(request["m"]["rx1"]["rssi"])
+        self.assertIsNone(request["mates"]["tx2"]["battery"]["gauge"])
+
+    def test_ssc_response_normalizes_ew_dx_telemetry_and_alerts(self):
+        response = {"device": {"product": "EW-DX EM 2", "firmware": "3.0.0"}, "rx1": {"name": "Vox", "frequency": 548250}, "m": {"rx1": {"rsqi": 15, "af": -30}}, "mates": {"tx1": {"mute": True, "battery": {"gauge": 9, "lifetime": 25}, "warnings": ["AfPeak"]}}}
+        mic = parse_ssc_response(response, {"id": "ewdx", "name": "EW-DX"}, [1])[0]
+        self.assertTrue(mic["online"])
+        self.assertTrue(mic["muted"])
+        self.assertEqual(mic["battery_percent"], 9)
+        self.assertEqual(mic["rf"], 15)
+        self.assertEqual(mic["frequency"], "548.250 MHz")
+        self.assertIn("Low battery", mic["errors"])
+        self.assertIn("Weak RF signal", mic["errors"])
 
 
 class RuntimeAssignmentTests(unittest.TestCase):

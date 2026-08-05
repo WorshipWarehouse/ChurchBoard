@@ -56,6 +56,12 @@ The photo card and compact audio card use status borders:
 
 Deleting a microphone removes its receiver mapping only. It does not change Planning Center schedules.
 
+## 4. Add Sennheiser microphones
+
+ChurchBoard also monitors Sennheiser EW-DX receivers through the legacy Sennheiser Sound Control Protocol (SSC). In **Settings**, add a microphone, choose **Sennheiser**, enter the receiver IP address and channel, then save. The default SSC UDP port is **45**.
+
+Enable **3rd Party Access → Legacy** on the receiver before connecting it. Current support polls EW-DX SSCv1 telemetry: battery percentage and runtime, transmitter mute, RF quality/RSSI, AF level, carrier frequency, device model, firmware, and device warnings. EW-DX firmware 4.0 and later can use Sennheiser’s secured SSCv2 REST API, which is not yet supported by ChurchBoard; select Legacy mode for this integration.
+
 ## 4. Connect ProPresenter
 
 For the complete linked-playlist workflow, recommended Planning Center integration settings, Network API setup, production checklist, and troubleshooting, see **[ProPresenter setup](PROPRESENTER.md)**.

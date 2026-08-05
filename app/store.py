@@ -54,6 +54,7 @@ def default_data() -> dict[str, Any]:
             },
             "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.075},
             "shure": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
+            "sennheiser": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
             "open_sound_meter": {
                 "enabled": False,
                 "reports_enabled": True,
@@ -90,7 +91,7 @@ class ConfigStore:
             baseline = default_data()
             baseline.update(raw)
             baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
-            for section in ("planning_center", "propresenter", "shure", "open_sound_meter", "restream"):
+            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream"):
                 baseline["settings"][section] = {
                     **default_data()["settings"][section],
                     **raw.get("settings", {}).get(section, {}),

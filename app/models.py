@@ -50,6 +50,7 @@ class SettingsUpdate(BaseModel):
     planning_center: dict[str, Any] = Field(default_factory=dict)
     propresenter: dict[str, Any] = Field(default_factory=dict)
     shure: dict[str, Any] = Field(default_factory=dict)
+    sennheiser: dict[str, Any] = Field(default_factory=dict)
     open_sound_meter: dict[str, Any] = Field(default_factory=dict)
     restream: dict[str, Any] = Field(default_factory=dict)
     position_mic_map: dict[str, str] = Field(default_factory=dict)

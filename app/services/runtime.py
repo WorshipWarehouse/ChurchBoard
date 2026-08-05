@@ -12,6 +12,7 @@ from typing import Any
 from app.services.planning_center import PlanningCenterClient, calculate_timing, parse_time, service_items
 from app.services.propresenter import ProPresenterClient
 from app.services.shure import ShureClient
+from app.services.sennheiser import SennheiserClient
 from app.services.spl_reports import SPLReportStore
 from app.services.osm import OSMListener
 from app.services.restream import RestreamClient
@@ -25,7 +26,7 @@ class RuntimeService:
         self.state: dict[str, Any] = self.demo_state()
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
-        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0, "restream": 0.0}
+        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0, "sennheiser": 0.0, "restream": 0.0}
         self._service_control: dict[str, Any] = {"active": False}
         self._pp_live_candidate = ""
         self._pp_live_candidate_since = 0.0
@@ -38,6 +39,8 @@ class RuntimeService:
         self._osm_listener = OSMListener(self.record_osm_measurement)
         self._osm_sources: dict[str, dict[str, Any]] = {}
         self._osm_auto_source_key = ""
+        self._restream_client: RestreamClient | None = None
+        self._restream_key: tuple[Any, ...] | None = None
 
     def record_spl_measurement(self, measurement: dict[str, Any], metric_key: str = "a_fast", metric_label: str = "A-weighted Fast") -> None:
         """Persist a normalized bridge reading against the current LIVE item."""
@@ -89,9 +92,6 @@ class RuntimeService:
             }
             for source in self._osm_sources.values()
         ]
-        self._restream_client: RestreamClient | None = None
-        self._restream_key: tuple[Any, ...] | None = None
-
     async def start(self) -> None:
         self._stop.clear()
         self._task = asyncio.create_task(self._run())
@@ -290,14 +290,21 @@ class RuntimeService:
             self._last_live = None
             self._rehearsal_clock = {}
         shure = ShureClient(config.get("shure", {}))
+        sennheiser = SennheiserClient(config.get("sennheiser", {}))
         shure_due = clock - self._last_refresh["shure"] >= float(config.get("shure", {}).get("refresh_seconds", 0.5))
-        if shure.configured and (force or shure_due):
-            next_state["mics"] = await shure.status()
+        sennheiser_due = clock - self._last_refresh["sennheiser"] >= float(config.get("sennheiser", {}).get("refresh_seconds", 0.5))
+        if (shure.configured and (force or shure_due)) or (sennheiser.configured and (force or sennheiser_due)):
+            shure_status, sennheiser_status = await asyncio.gather(
+                shure.status() if shure.configured else asyncio.sleep(0, result=[]),
+                sennheiser.status() if sennheiser.configured else asyncio.sleep(0, result=[]),
+            )
+            next_state["mics"] = shure_status + sennheiser_status
             self._last_refresh["shure"] = clock
-        elif not shure.configured:
+            self._last_refresh["sennheiser"] = clock
+        elif not shure.configured and not sennheiser.configured:
             # Runtime starts with demonstration content so the first launch is
             # useful. Once demo mode is off, never carry those sample mics into
-            # a real Planning Center plan that has no Shure configuration.
+            # a real Planning Center plan that has no wireless configuration.
             next_state["mics"] = []
         restream_settings = config.get("restream", {})
         expires_at = float(restream_settings.get("access_token_expires_at") or 0)
