@@ -53,6 +53,7 @@ def default_data() -> dict[str, Any]:
             },
             "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.075},
             "shure": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
+            "restream": {"enabled": False, "client_id": "", "client_secret": "", "access_token": "", "refresh_token": "", "access_token_expires_at": 0, "refresh_seconds": 5},
             "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
             "manual_plan": None,
         },
@@ -81,7 +82,7 @@ class ConfigStore:
             baseline = default_data()
             baseline.update(raw)
             baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
-            for section in ("planning_center", "propresenter", "shure"):
+            for section in ("planning_center", "propresenter", "shure", "restream"):
                 baseline["settings"][section] = {
                     **default_data()["settings"][section],
                     **raw.get("settings", {}).get(section, {}),
@@ -130,4 +131,10 @@ class ConfigStore:
         pc = settings.get("planning_center", {})
         pc["secret_configured"] = bool(pc.get("secret"))
         pc["secret"] = ""
+        restream = settings.get("restream", {})
+        restream["access_token_configured"] = bool(restream.get("access_token"))
+        restream["client_secret_configured"] = bool(restream.get("client_secret"))
+        restream["access_token"] = ""
+        restream["client_secret"] = ""
+        restream["refresh_token"] = ""
         return settings

@@ -12,6 +12,7 @@ from typing import Any
 from app.services.planning_center import PlanningCenterClient, calculate_timing, parse_time, service_items
 from app.services.propresenter import ProPresenterClient
 from app.services.shure import ShureClient
+from app.services.restream import RestreamClient
 from app.store import ConfigStore
 
 
@@ -21,7 +22,7 @@ class RuntimeService:
         self.state: dict[str, Any] = self.demo_state()
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
-        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0}
+        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0, "restream": 0.0}
         self._service_control: dict[str, Any] = {"active": False}
         self._pp_live_candidate = ""
         self._pp_live_candidate_since = 0.0
@@ -31,6 +32,8 @@ class RuntimeService:
         self._propresenter_client: ProPresenterClient | None = None
         self._propresenter_key: tuple[Any, ...] | None = None
         self._planning_center_detail_task: asyncio.Task | None = None
+        self._restream_client: RestreamClient | None = None
+        self._restream_key: tuple[Any, ...] | None = None
 
     async def start(self) -> None:
         self._stop.clear()
@@ -47,6 +50,9 @@ class RuntimeService:
         if self._propresenter_client is not None:
             await self._propresenter_client.close()
             self._propresenter_client = None
+        if self._restream_client is not None:
+            await self._restream_client.close()
+            self._restream_client = None
         if self._planning_center_detail_task is not None:
             self._planning_center_detail_task.cancel()
             try:
@@ -75,6 +81,7 @@ class RuntimeService:
             demo["timing"] = calculate_timing(demo.get("service"))
             demo["manual_plan"] = config.get("manual_plan")
             demo["planning_center_live"] = {"enabled": bool((config.get("planning_center", {}).get("live_from_propresenter") or {}).get("enabled")), "state": "demo", "message": "Services LIVE automation is available when demonstration data is off"}
+            demo["restream"] = {"connected": False, "status": "offline", "title": "Restream monitoring is unavailable in demo mode", "destinations": []}
             self._apply_service_control(demo)
             self.state = demo
             return self.state
@@ -216,6 +223,34 @@ class RuntimeService:
             # useful. Once demo mode is off, never carry those sample mics into
             # a real Planning Center plan that has no Shure configuration.
             next_state["mics"] = []
+        restream_settings = config.get("restream", {})
+        expires_at = float(restream_settings.get("access_token_expires_at") or 0)
+        if restream_settings.get("refresh_token") and expires_at and expires_at <= datetime.now(timezone.utc).timestamp() + 120:
+            refresh_client = RestreamClient(restream_settings)
+            try:
+                token = await refresh_client.refresh_access_token()
+                restream_settings.update({"access_token": token.get("access_token") or token.get("accessToken") or "", "refresh_token": token.get("refresh_token") or token.get("refreshToken") or "", "access_token_expires_at": token.get("expires") or token.get("accessTokenExpiresEpoch") or 0})
+                stored_data["settings"]["restream"] = restream_settings
+                self.store.save(stored_data)
+            except Exception as exc:
+                next_state["restream"] = {"connected": False, "status": "offline", "title": "Restream authorization expired", "destinations": [], "error": str(exc)}
+            finally:
+                await refresh_client.close()
+        restream_key = (bool(restream_settings.get("enabled")), str(restream_settings.get("access_token") or ""))
+        if self._restream_client is None or restream_key != self._restream_key:
+            if self._restream_client is not None:
+                await self._restream_client.close()
+            self._restream_client = RestreamClient(restream_settings)
+            self._restream_key = restream_key
+        restream_due = clock - self._last_refresh["restream"] >= max(2.0, float(restream_settings.get("refresh_seconds", 5)))
+        if self._restream_client.configured and (force or restream_due):
+            self._last_refresh["restream"] = clock
+            try:
+                next_state["restream"] = await self._restream_client.status()
+            except Exception as exc:
+                next_state["restream"] = {"connected": False, "status": "offline", "title": "Restream unavailable", "destinations": [], "error": str(exc)}
+        elif not self._restream_client.configured:
+            next_state["restream"] = {"connected": False, "status": "offline", "title": "Restream is not connected", "destinations": []}
         self._apply_assignments(next_state, config.get("position_mic_map", {}))
         self._apply_service_control(next_state)
         self.state = next_state

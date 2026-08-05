@@ -132,6 +132,11 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Application ID", response.json()["detail"])
 
+    def test_restream_connect_requires_saved_client_credentials(self):
+        response = self.client.get("/api/integrations/restream/connect", follow_redirects=False)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Client ID", response.json()["detail"])
+
     def test_demo_catalog_exposes_grouped_positions(self):
         response = self.client.get("/api/integrations/planning-center/catalog")
         self.assertEqual(response.status_code, 200)

@@ -11,6 +11,7 @@ from app.models import Dashboard
 from app.services.planning_center import PlanningCenterClient, calculate_timing, item_leader, position_key, selected_service_time, service_items
 from app.services.shure import ShureClient, battery_percent, percent, transmitter_active
 from app.services.propresenter import ProPresenterClient
+from app.services.restream import RestreamClient
 from app.services.runtime import RuntimeService
 from app.store import ConfigStore
 
@@ -57,10 +58,33 @@ class StoreTests(unittest.TestCase):
             store = ConfigStore(Path(directory) / "state.json")
             data = store.load()
             data["settings"]["planning_center"]["secret"] = "do-not-return"
+            data["settings"]["restream"]["access_token"] = "also-do-not-return"
             store.save(data)
             public = store.public_settings()["planning_center"]
             self.assertEqual(public["secret"], "")
             self.assertTrue(public["secret_configured"])
+            restream = store.public_settings()["restream"]
+            self.assertEqual(restream["access_token"], "")
+            self.assertTrue(restream["access_token_configured"])
+
+    def test_restream_client_normalizes_live_event_and_destinations(self):
+        client = RestreamClient({"enabled": True, "access_token": "token"})
+        responses = {
+            "/user/events/in-progress": [{"id": "event-1", "title": "Sunday Worship", "startedAt": 1, "destinations": [{"channelId": 12}]}],
+            "/user/events/upcoming?scheduled=true": [],
+            "/user/channels": {"channels": [{"id": 12, "displayName": "YouTube", "platformId": 5}, {"id": 13, "displayName": "Facebook", "platformId": 14}]},
+            "/user/events/event-1/analytics/viewers": {"total": {"viewersPerMinute": [{"timestamp": 1, "viewers": 42}]}},
+        }
+
+        async def request(path):
+            return responses[path]
+
+        client._request = request
+        status = asyncio.run(client.status())
+        self.assertEqual(status["status"], "live")
+        self.assertEqual(status["viewers"], 42)
+        self.assertEqual(status["destinations"][0]["status"], "healthy")
+        self.assertEqual(status["destinations"][1]["status"], "offline")
 
 
 class DashboardTests(unittest.TestCase):

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class Widget(BaseModel):
     id: str = Field(min_length=1, max_length=80)
-    type: Literal["clock", "service", "timing", "assignments", "mics", "slides", "notes", "order", "person", "people", "spl", "controls", "text"]
+    type: Literal["clock", "service", "timing", "assignments", "mics", "slides", "notes", "order", "person", "people", "spl", "controls", "text", "restream"]
     x: int = Field(ge=0, le=23)
     y: int = Field(ge=0, le=100)
     w: int = Field(ge=1, le=24)
@@ -50,5 +50,6 @@ class SettingsUpdate(BaseModel):
     planning_center: dict[str, Any] = Field(default_factory=dict)
     propresenter: dict[str, Any] = Field(default_factory=dict)
     shure: dict[str, Any] = Field(default_factory=dict)
+    restream: dict[str, Any] = Field(default_factory=dict)
     position_mic_map: dict[str, str] = Field(default_factory=dict)
     manual_plan: dict[str, str] | None = None

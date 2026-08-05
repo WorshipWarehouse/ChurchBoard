@@ -1,8 +1,8 @@
 const slug=decodeURIComponent(location.pathname.split("/").pop()),grid=document.querySelector("#editor-grid"),form=document.querySelector("#inspector");
 let dashboard,selected=null,dirty=false,catalogTeams=[],catalogError="";
 const newId=type=>`${type}-${Date.now().toString(36)}`;
-const defaults={clock:{w:3,h:2},service:{w:5,h:2},timing:{w:4,h:2},assignments:{w:7,h:6,team_ids:[],position_keys:[],position_labels:{},display_mode:"photos",use_planning_center_icon:false,unassigned_media_title:"Icon"},slides:{w:6,h:4,show_notes:true,slide_mode:"image",slide_layout:"full",show_current:true,show_next:true,show_parts:true,show_slide_count:false},notes:{w:4,h:2},order:{w:5,h:3,limit:6,show_leader:false,show_mic:false},people:{w:4,h:4,team_ids:[],position_keys:[],position_labels:{}},spl:{w:4,h:3,green_max:75,orange_max:85,calibration_offset:100,auto_start:false},controls:{w:4,h:2},text:{w:4,h:2,text:"Custom text"}};
-const paletteTypes=["clock","service","timing","assignments","slides","notes","order","people","spl","controls","text"];
+const defaults={clock:{w:3,h:2},service:{w:5,h:2},timing:{w:4,h:2},assignments:{w:7,h:6,team_ids:[],position_keys:[],position_labels:{},display_mode:"photos",use_planning_center_icon:false,unassigned_media_title:"Icon"},slides:{w:6,h:4,show_notes:true,slide_mode:"image",slide_layout:"full",show_current:true,show_next:true,show_parts:true,show_slide_count:false},notes:{w:4,h:2},order:{w:5,h:3,limit:6,show_leader:false,show_mic:false},people:{w:4,h:4,team_ids:[],position_keys:[],position_labels:{}},spl:{w:4,h:3,green_max:75,orange_max:85,calibration_offset:100,auto_start:false},controls:{w:4,h:2},restream:{w:5,h:4},text:{w:4,h:2,text:"Custom text"}};
+const paletteTypes=["clock","service","timing","assignments","slides","notes","order","people","spl","controls","restream","text"];
 
 async function load(){
   dashboard=await api(`/api/dashboards/${encodeURIComponent(slug)}`);
