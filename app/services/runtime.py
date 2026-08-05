@@ -827,6 +827,13 @@ class RuntimeService:
                 people[position] = person
             if position_key:
                 people[position_key] = person
+            for scheduled_position in person.get("positions") or []:
+                scheduled_key = str(scheduled_position.get("key") or "").strip()
+                scheduled_name = str(scheduled_position.get("name") or "").strip().casefold()
+                if scheduled_key:
+                    people[scheduled_key] = person
+                if scheduled_name:
+                    people[scheduled_name] = person
         mic_by_id = {mic.get("id"): mic for mic in state.get("mics", [])}
         for position, mic_id in mapping.items():
             if mic_id in mic_by_id:

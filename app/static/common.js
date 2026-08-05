@@ -44,16 +44,27 @@ const micMeters = mic => `<div class="meters">${[["BAT",mic.battery_percent],["R
 const positionNameFromKey = key => String(key||"").split("::").at(-1).replace(/\b\w/g,letter=>letter.toUpperCase())||"Position";
 const assignmentEntries = (settings,state) => {
   const selectedKeys=[...new Set(settings.position_keys||[])],labels=settings.position_labels||{},teamIds=new Set((settings.team_ids||[]).map(String)),people=state.people||[],mics=state.mics||[];
-  const peopleByKey=new Map(people.filter(person=>person.position_key).map(person=>[person.position_key,person]));
-  const micByKey=new Map(mics.filter(mic=>mic.assignment?.position_key).map(mic=>[mic.assignment.position_key,mic]));
+  const peopleByKey=new Map();people.forEach(person=>{const keys=person.position_keys?.length?person.position_keys:[person.position_key];keys.filter(Boolean).forEach(key=>peopleByKey.set(key,person))});
+  const micsByKey=new Map();mics.filter(mic=>mic.assignment?.position_key).forEach(mic=>{const key=mic.assignment.position_key,existing=micsByKey.get(key)||[];existing.push(mic);micsByKey.set(key,existing)});
   let keys=selectedKeys;
-  if(!keys.length)keys=[...new Set([...people.map(person=>person.position_key),...mics.map(mic=>mic.assignment?.position_key)].filter(Boolean).filter(key=>!teamIds.size||teamIds.has(String(key).split("::")[0])))];
+  if(!keys.length)keys=[...new Set([...people.flatMap(person=>person.position_keys?.length?person.position_keys:[person.position_key]),...mics.map(mic=>mic.assignment?.position_key)].filter(Boolean).filter(key=>!teamIds.size||teamIds.has(String(key).split("::")[0])))];
   if(!keys.length)return mics.filter(mic=>!teamIds.size||teamIds.has(String(mic.assignment?.team_id||"")));
-  return keys.map(key=>{
-    const meta=labels[key]||{},person=peopleByKey.get(key),positionName=meta.name||person?.position||positionNameFromKey(key),teamId=meta.team_id||person?.team_id||String(key).split("::")[0],teamName=meta.team_name||person?.team_name||"",matchingMic=micByKey.get(key)||mics.find(mic=>String(mic.assignment?.position||"").trim().toLocaleLowerCase()===String(positionName).trim().toLocaleLowerCase());
-    const existing=matchingMic?.assignment||{},assignment={...meta,...existing,...person,position:positionName,position_key:key,team_id:teamId,team_name:teamName,name:person?.name||"Unassigned",photo:person?.photo||""};
-    return matchingMic?{...matchingMic,assignment}:{id:`position-${key}`,name:"No mic",receiver:"No mic assigned",channel:"—",battery_percent:0,rf:0,audio:0,online:false,errors:["No microphone assigned"],placeholder:true,assignment};
-  });
+  const entries=[],seenPeople=new Set();
+  for(const key of keys){
+    const meta=labels[key]||{},person=peopleByKey.get(key),positionName=meta.name||person?.position||positionNameFromKey(key),teamId=meta.team_id||person?.team_id||String(key).split("::")[0],teamName=meta.team_name||person?.team_name||"";
+    if(person){
+      const identity=String(person.person_id||person.id||key);if(seenPeople.has(identity))continue;seenPeople.add(identity);
+      const personKeys=(person.position_keys?.length?person.position_keys:[person.position_key]).filter(positionKey=>keys.includes(positionKey));
+      const positions=personKeys.map(positionKey=>{const positionMeta=labels[positionKey]||{},scheduled=(person.positions||[]).find(item=>item.key===positionKey)||{};return positionMeta.name||scheduled.name||positionNameFromKey(positionKey)});
+      const equipment=[...new Map(personKeys.flatMap(positionKey=>micsByKey.get(positionKey)||[]).map(mic=>[mic.id,mic])).values()];
+      const primary=equipment[0],assignment={...person,position:positions.join(", "),position_key:key,position_keys:personKeys,team_id:teamId,team_name:teamName,name:person.name||"Unassigned",photo:person.photo||""};
+      entries.push(primary?{...primary,assignment,equipment}:{id:`person-${identity}`,name:"No mic",receiver:"No mic assigned",channel:"—",battery_percent:0,rf:0,audio:0,online:false,errors:["No microphone assigned"],placeholder:true,assignment,equipment:[]});
+      continue;
+    }
+    const matchingMic=(micsByKey.get(key)||[])[0]||mics.find(mic=>String(mic.assignment?.position||"").trim().toLocaleLowerCase()===String(positionName).trim().toLocaleLowerCase()),existing=matchingMic?.assignment||{},assignment={...meta,...existing,position:positionName,position_key:key,team_id:teamId,team_name:teamName,name:"Unassigned",photo:""};
+    entries.push(matchingMic?{...matchingMic,assignment,equipment:[matchingMic]}:{id:`position-${key}`,name:"No mic",receiver:"No mic assigned",channel:"—",battery_percent:0,rf:0,audio:0,online:false,errors:["No microphone assigned"],placeholder:true,assignment,equipment:[]});
+  }
+  return entries;
 };
 const filteredPeople = (settings,state) => {
   const people=state.people||[],selectedKeys=[...new Set(settings.position_keys||[])],teamIds=new Set((settings.team_ids||[]).map(String));
@@ -94,7 +105,7 @@ const formatClockTime = (value,timeZone) => {if(!value)return"—";try{return ne
 const formatItemLength = seconds => {const value=Math.max(0,Math.round(Number(seconds)||0));return`${Math.floor(value/60)}:${String(value%60).padStart(2,"0")}`};
 const estimatedItemTime = (item,timing,state) => {const start=Date.parse(timing.service_start_at||"");if(!Number.isFinite(start))return"—";const adjusting=["running","live","controlled"].includes(timing.state),drift=adjusting?Number(timing.overall_delta||0):0;return formatClockTime(new Date(start+(Number(item.starts_after)||0)*1000+drift*1000),state.timezone)};
 const micCardMarkup = (mic,mode="photos",options={}) => {
-  const person=mic.assignment||{},health=micHealth(mic),active=micIsActive(mic),displayName=person.name&&person.name!=="Position unfilled"?person.name:"Unassigned",position=[person.team_name,person.position].filter(Boolean).join(" · ")||"Unmapped position",numericChannel=Number(mic.channel),channel=Number.isFinite(numericChannel)?String(numericChannel).padStart(2,"0"):"—",status=mic.placeholder?"NO MIC":active?`${mic.battery_percent||0}% BAT`:"OFFLINE",hardware=mic.placeholder?"No microphone assigned":[mic.receiver,`Ch ${mic.channel}`].filter(Boolean).join(" · ");
+  const person=mic.assignment||{},health=micHealth(mic),active=micIsActive(mic),displayName=person.name&&person.name!=="Position unfilled"?person.name:"Unassigned",position=[person.team_name,person.position].filter(Boolean).join(" · ")||"Unmapped position",numericChannel=Number(mic.channel),channel=Number.isFinite(numericChannel)?String(numericChannel).padStart(2,"0"):"—",status=mic.placeholder?"NO MIC":active?`${mic.battery_percent||0}% BAT`:"OFFLINE",equipment=mic.equipment||[mic],hardware=mic.placeholder?"No microphone assigned":equipment.map(item=>[item.name||item.receiver,`Ch ${item.channel}`].filter(Boolean).join(" · ")).join(" + ");
   if(mode==="technical")return `<article class="mic-card technical-tile ${health} ${mic.placeholder?"no-mic":""}"><div class="technical-header"><div><strong>${escapeHtml(mic.name||"Mic")}</strong><span>${escapeHtml(position)}</span></div><b>${status}</b></div><div class="technical-person">${escapeHtml(displayName)}</div><div class="technical-stats">${[["Battery",mic.battery_percent],["RF",mic.rf],["Audio",mic.audio]].map(([label,value])=>`<div><span>${label}</span><strong>${value||0}%</strong></div>`).join("")}</div><div class="technical-meta">${escapeHtml(hardware)}${mic.frequency?` · ${escapeHtml(mic.frequency)}`:""}${mic.tx_type?` · ${escapeHtml(mic.tx_type)}`:""}</div>${mic.errors?.length?`<div class="technical-error">${escapeHtml(mic.errors[0])}</div>`:""}</article>`;
   const customIcon=displayName==="Unassigned"?String(options.unassignedIcon||""):"",portrait=person.photo?`<img src="${escapeHtml(person.photo)}" alt="${escapeHtml(displayName)}">`:customIcon?`<img class="unassigned-custom-icon" src="${escapeHtml(customIcon)}" alt="Unassigned">`:displayName==="Unassigned"?`<div class="talent-photo-placeholder"><span class="unassigned-board-icon" role="img" aria-label="Unassigned"></span></div>`:`<div class="talent-photo-placeholder"><span>${initials(displayName)}</span></div>`;
   return `<article class="mic-card talent-tile ${health} ${person.photo?"has-photo":""} ${mic.placeholder?"no-mic":""}"><div class="talent-media">${portrait}</div><div class="talent-gradient"></div><div class="talent-channel"><strong>${channel}</strong><em>${escapeHtml(mic.name||"Mic")}</em><span>${status}</span></div><div class="talent-identity"><div class="mic-person">${escapeHtml(displayName)}</div><div class="mic-position">${escapeHtml(position)}</div><div class="mic-hardware">${escapeHtml(hardware)}</div></div>${micMeters(mic)}</article>`;
