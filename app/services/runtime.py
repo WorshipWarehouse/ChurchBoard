@@ -849,7 +849,14 @@ class RuntimeService:
                 fallback_position = lookup.split("::", 1)[-1] if "::" in lookup else lookup
                 fallback_team = lookup.split("::", 1)[0] if "::" in lookup else ""
                 person = person or {"name": "Unassigned", "photo": "", "position": fallback_position, "position_key": lookup, "team_id": fallback_team}
-                mic_by_id[mic_id]["assignment"] = {"position": fallback_position, "position_key": lookup, **person}
+                # Retain the consolidated person's complete role list while
+                # attaching this microphone to the exact configured role.
+                mic_by_id[mic_id]["assignment"] = {
+                    **person,
+                    "position": fallback_position,
+                    "position_key": lookup,
+                    "team_id": fallback_team or person.get("team_id", ""),
+                }
 
     @staticmethod
     def _configured_media_titles(data: dict[str, Any]) -> list[str]:
