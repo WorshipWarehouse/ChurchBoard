@@ -32,10 +32,11 @@ The service-type name and ID are saved together. If Planning Center temporarily 
 2. Select a **Scheduled Positions & Mics** widget.
 3. In the inspector, check the teams/categories to include, such as Band or Production.
 4. Check the individual Planning Center positions to display.
-5. Drag positions into the desired display order.
-6. Save the dashboard.
+5. Under **Cards represent**, choose **One card per person** or **One card per position**.
+6. Drag positions into the desired display order.
+7. Save the dashboard.
 
-Every selected position appears even when no person or microphone is assigned. When one person holds multiple selected positions, ChurchBoard shows one entry with those positions together and lists every mapped microphone/equipment channel under that person. An open Planning Center position displays **Unassigned**.
+Every selected position appears even when no person or microphone is assigned. **One card per person** consolidates a person who holds several selected roles—such as vocals and guitar—into one card and lists all of that person's mapped microphone/equipment channels. **One card per position** keeps every selected role in its own card, so the same person can appear more than once. This choice is saved independently for each dashboard widget, allowing the green room and audio booth to use different views. An open Planning Center position displays **Unassigned**.
 
 ## 3. Add Shure microphones
 
