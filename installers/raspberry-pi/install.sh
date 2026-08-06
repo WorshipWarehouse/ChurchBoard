@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPOSITORY="${CHURCHBOARD_REPOSITORY:-wtapper89/ChurchBoard}"
+REPOSITORY="${CHURCHBOARD_REPOSITORY:-WorshipWarehouse/ChurchBoard}"
 REF="${CHURCHBOARD_REF:-main}"
 ENABLE_KIOSK=false
 
