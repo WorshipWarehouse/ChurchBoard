@@ -7,6 +7,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.osm import parse_osm_packet
 
 
 class ApiTests(unittest.TestCase):
@@ -55,6 +56,11 @@ class ApiTests(unittest.TestCase):
         self.assertIn('class="unassigned-board-icon"', common_script)
         self.assertIn('settings.slide_layout==="previews_only"', common_script)
         self.assertIn('settings.show_title===false', common_script)
+        self.assertIn('full-service-order-list', common_script)
+        self.assertIn('order_display_mode', self.client.get("/static/editor.js").text)
+        self.assertIn('name="assignment_grouping"', self.client.get("/static/editor.js").text)
+        self.assertIn('settings.card_grouping!=="position"', common_script)
+        self.assertNotIn('talent-channel"><strong>', common_script)
         stylesheet = self.client.get("/static/style.css").text
         self.assertIn('mask:url("/static/churchboard-mark.svg")', stylesheet)
         mark = self.client.get("/static/churchboard-mark.svg")
@@ -116,6 +122,36 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(cached.status_code, 304)
         self.assertEqual(cached.content, b"")
 
+    def test_osm_measurements_are_available_as_service_reports(self):
+        accepted = self.client.post("/api/integrations/osm/measurement", json={"laeq": 78.4, "peak": 92.1, "timestamp": "2026-08-05T12:00:00+00:00"})
+        self.assertEqual(accepted.status_code, 202)
+        services = self.client.get("/api/reports/services").json()["items"]
+        self.assertEqual(services[0]["id"], "demo")
+        csv_report = self.client.get("/api/reports/services/demo/spl-averages.csv")
+        self.assertEqual(csv_report.status_code, 200)
+        self.assertIn("Worship", csv_report.text)
+        graph = self.client.get("/api/reports/services/demo/spl-graph.html")
+        self.assertEqual(graph.status_code, 200)
+        self.assertIn("78.4", graph.text)
+
+    def test_osm_remote_api_levels_packet_is_normalized(self):
+        packet = b'{"api":"Open Sound Meter","host":"FOH-Mac","source":"source-123","objectName":"House SPL","message":"levels","data":{"A":{"Fast":-61.6,"Slow":-63.9},"C":{"Fast":-58.2,"Slow":-59.1},"Z":{"Fast":-55.8}}}'
+        parsed = parse_osm_packet(packet)
+        self.assertEqual(parsed["laeq"], 78.4)
+        self.assertEqual(parsed["a_slow"], 76.1)
+        self.assertEqual(parsed["z_fast"], 84.2)
+        self.assertEqual(parsed["c_fast"], 81.8)
+        self.assertEqual(parsed["c_slow"], 80.9)
+        self.assertEqual(parsed["source_id"], "source-123")
+        self.assertEqual(parsed["source_name"], "House SPL")
+        self.assertEqual(parsed["source_host"], "FOH-Mac")
+
+    def test_osm_remote_api_floor_is_zero_db_spl(self):
+        packet = b'{"api":"Open Sound Meter","message":"levels","data":{"A":{"Fast":-140,"Slow":-160}}}'
+        parsed = parse_osm_packet(packet)
+        self.assertEqual(parsed["a_fast"], 0.0)
+        self.assertEqual(parsed["a_slow"], 0.0)
+
     def test_service_control_endpoint_takes_and_advances_service(self):
         taken = self.client.post("/api/service-control/take")
         self.assertEqual(taken.status_code, 200)
@@ -131,6 +167,11 @@ class ApiTests(unittest.TestCase):
         response = self.client.post("/api/integrations/planning-center/test")
         self.assertEqual(response.status_code, 400)
         self.assertIn("Application ID", response.json()["detail"])
+
+    def test_restream_connect_requires_saved_client_credentials(self):
+        response = self.client.get("/api/integrations/restream/connect", follow_redirects=False)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Client ID", response.json()["detail"])
 
     def test_demo_catalog_exposes_grouped_positions(self):
         response = self.client.get("/api/integrations/planning-center/catalog")

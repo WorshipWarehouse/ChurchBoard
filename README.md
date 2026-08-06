@@ -6,7 +6,7 @@
 
 <h1 align="center">ChurchBoard</h1>
 
-ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, and Shure QLX-D/ULX-D microphone telemetry in configurable displays for the stage, green room, audio booth, and production team.
+ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, Shure QLX-D/ULX-D and Sennheiser EW-DX microphone telemetry, Open Sound Meter levels, and Restream broadcast status in configurable displays for the stage, green room, audio booth, and production team.
 
 ## Watch the setup and demo video
 
@@ -17,14 +17,16 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 
 ## What ChurchBoard shows
 
-- Photo-forward scheduled-position and microphone cards, including unassigned positions
-- Shure QLX-D and ULX-D battery, RF, audio, transmitter, and online/offline status
+- Photo-forward scheduled-position and microphone cards, including unassigned positions and a per-widget choice between one card per person or one card per position
+- Shure QLX-D/ULX-D and Sennheiser EW-DX battery, RF/audio, transmitter, mute, warning, and online/offline status
 - Current and next ProPresenter slides as text or slide images, with live countdown overlays and video playback progress
 - ProPresenter item title, part labels and colors, slide number, and notes
-- Complete Planning Center order of service—including pre-service and post-service sections—with estimated clock times, leaders, and mapped microphones
+- Compact, complete scrollable, or fit-to-board Planning Center orders of service—including pre-service and post-service sections—with durations, estimated clock times, leaders, and mapped microphones
 - Current item and overall service timing
 - Team-member lists with photos, filtered by team and position
-- Browser-based SPL meter and service-control buttons
+- Direct Open Sound Meter monitoring with selectable weighting/response and downloadable service graphs and per-item averages
+- Restream broadcast, viewer, and destination-status monitoring through OAuth
+- Planning Center Services LIVE control buttons
 - A WYSIWYG dashboard editor with independent layouts and color-matched liquid-glass widgets for each destination
 
 ![ChurchBoard audio-board dashboard](docs/screenshots/audio-board.jpg)
@@ -76,17 +78,19 @@ Open `http://127.0.0.1:8040/admin`, turn off demonstration data, and configure P
 
 ![ChurchBoard integrations setup](docs/screenshots/setup.jpg)
 
-Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Planning Center setup](docs/PLANNING_CENTER.md) and [ProPresenter setup](docs/PROPRESENTER.md) guides. They cover secure personal-access-token creation, permissions, photos, leaders, linked service playlists, the Network API, Services LIVE automation, dashboards, microphone mapping, and troubleshooting.
+Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Planning Center setup](docs/PLANNING_CENTER.md), [ProPresenter setup](docs/PROPRESENTER.md), [Open Sound Meter setup](docs/OPEN_SOUND_METER.md), and [Restream setup](docs/RESTREAM.md) guides. They cover secure credentials, permissions, photos, leaders, linked service playlists, the Network API, Services LIVE automation, dashboards, microphone mapping, level reporting, livestream monitoring, and troubleshooting.
 
 ## Dashboard editing
 
-Each dashboard has a stable URL. Add widgets from the palette, drag and resize them directly on the canvas, then configure the selected widget in the inspector. Every widget title can be hidden. ProPresenter widgets can show full details or previews only, and their part labels can be switched on or off. Text, cards, photos, and status displays scale with their widget. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
+Each dashboard has a stable URL. Add widgets from the palette, drag and resize them directly on the canvas, then configure the selected widget in the inspector. Every widget title can be hidden. Scheduled-position widgets can consolidate multiple roles into one card per person or retain one card per position. ProPresenter widgets can show full details or previews only, and their part labels can be switched on or off. Order-of-service widgets can show a compact current window, a scrollable complete plan, or the complete plan fitted to the widget. Text, cards, photos, and status displays scale with their widget. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
 
 ![ChurchBoard WYSIWYG dashboard editor](docs/screenshots/dashboard-editor.jpg)
 
 ## Credits, licenses, and legal
 
 ChurchBoard's visual microphone-monitoring direction was inspired by [Micboard](https://micboard.io/) by Karl Swanson, an independent MIT-licensed project for network-enabled Shure devices. The initial cross-platform dashboard concept also drew inspiration from [NewsTalentMonitorPlus](https://github.com/wtapper89/NewsTalentMonitorPlus). ChurchBoard is a separate implementation and does not bundle either project's code or assets.
+
+Special thanks to [Caleb Hines (@WorshipWarehouse)](https://github.com/WorshipWarehouse) for the ChurchBoard 1.3 integration and dashboard contributions, including Open Sound Meter, Restream, scheduled-person consolidation, complete service-order display modes, and Sennheiser EW-DX monitoring. The original commits and authorship are preserved in the project history. See [Contributors](CONTRIBUTORS.md).
 
 The people shown in demonstration mode and documentation are AI-generated fictional samples, not real team members. ChurchBoard is independently developed and is not affiliated with or endorsed by Planning Center, Shure, Renewed Vision/ProPresenter, Micboard, Apple, Microsoft, or Raspberry Pi.
 

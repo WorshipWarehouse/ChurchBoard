@@ -13,9 +13,9 @@ DEFAULT_WIDGETS = [
     {"id": "clock", "type": "clock", "x": 0, "y": 0, "w": 3, "h": 2, "title": "Local Time", "settings": {}},
     {"id": "service", "type": "service", "x": 3, "y": 0, "w": 5, "h": 2, "title": "Service", "settings": {}},
     {"id": "timing", "type": "timing", "x": 8, "y": 0, "w": 4, "h": 2, "title": "Timing", "settings": {}},
-    {"id": "assignments", "type": "assignments", "x": 0, "y": 2, "w": 7, "h": 6, "title": "Scheduled Positions & Mics", "settings": {"team_ids": [], "position_keys": [], "position_labels": {}, "positions": [], "display_mode": "photos", "use_planning_center_icon": False, "unassigned_media_title": "Icon"}},
+    {"id": "assignments", "type": "assignments", "x": 0, "y": 2, "w": 7, "h": 6, "title": "Scheduled Positions & Mics", "settings": {"team_ids": [], "position_keys": [], "position_labels": {}, "positions": [], "display_mode": "photos", "card_grouping": "person", "use_planning_center_icon": False, "unassigned_media_title": "Icon"}},
     {"id": "slides", "type": "slides", "x": 7, "y": 2, "w": 5, "h": 4, "title": "ProPresenter", "settings": {"show_notes": True, "slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False}},
-    {"id": "order", "type": "order", "x": 7, "y": 6, "w": 5, "h": 2, "title": "Order of Service", "settings": {"limit": 6, "show_leader": False, "show_mic": False}},
+    {"id": "order", "type": "order", "x": 7, "y": 6, "w": 5, "h": 2, "title": "Order of Service", "settings": {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False}},
 ]
 
 
@@ -24,6 +24,7 @@ def default_data() -> dict[str, Any]:
     green_room_widgets = deepcopy(DEFAULT_WIDGETS)
     audio_widgets = deepcopy(DEFAULT_WIDGETS)
     next(widget for widget in audio_widgets if widget["id"] == "assignments")["settings"]["display_mode"] = "technical"
+    audio_widgets.append({"id": "osm", "type": "spl", "x": 7, "y": 8, "w": 5, "h": 3, "title": "Open Sound Meter", "settings": {"green_max": 75, "orange_max": 85, "reports_enabled": True}})
     return {
         "version": 1,
         "settings": {
@@ -53,6 +54,15 @@ def default_data() -> dict[str, Any]:
             },
             "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.075},
             "shure": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
+            "sennheiser": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
+            "open_sound_meter": {
+                "enabled": False,
+                "reports_enabled": True,
+                "report_weighting": "A",
+                "report_response": "Fast",
+                "source_id": "",
+            },
+            "restream": {"enabled": False, "client_id": "", "client_secret": "", "access_token": "", "refresh_token": "", "access_token_expires_at": 0, "refresh_seconds": 5},
             "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
             "manual_plan": None,
         },
@@ -81,7 +91,7 @@ class ConfigStore:
             baseline = default_data()
             baseline.update(raw)
             baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
-            for section in ("planning_center", "propresenter", "shure"):
+            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream"):
                 baseline["settings"][section] = {
                     **default_data()["settings"][section],
                     **raw.get("settings", {}).get(section, {}),
@@ -92,6 +102,8 @@ class ConfigStore:
             }
             for dashboard in baseline.get("dashboards", []):
                 dashboard.pop("theme", None)
+                if dashboard.get("id") == "audio" and not any(widget.get("type") == "spl" for widget in dashboard.get("widgets", [])):
+                    dashboard.setdefault("widgets", []).append({"id": "osm", "type": "spl", "x": 7, "y": 8, "w": 5, "h": 3, "title": "Open Sound Meter", "settings": {"green_max": 75, "orange_max": 85, "reports_enabled": True}})
                 color = str(dashboard.get("background_color") or "").strip().lower()
                 valid_color = len(color) == 7 and color.startswith("#") and all(
                     character in "0123456789abcdef" for character in color[1:]
@@ -103,11 +115,13 @@ class ConfigStore:
                         if widget.get("title") in {"", "Microphones"}:
                             widget["title"] = "Scheduled Positions & Mics"
                     if widget.get("type") == "assignments":
-                        widget["settings"] = {"team_ids": [], "position_keys": [], "position_labels": {}, "display_mode": "photos", "use_planning_center_icon": False, "unassigned_media_title": "Icon", **widget.get("settings", {})}
+                        widget["settings"] = {"team_ids": [], "position_keys": [], "position_labels": {}, "display_mode": "photos", "card_grouping": "person", "use_planning_center_icon": False, "unassigned_media_title": "Icon", **widget.get("settings", {})}
                     if widget.get("type") == "slides":
                         widget["settings"] = {"slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False, "show_notes": True, **widget.get("settings", {})}
                     if widget.get("type") == "order":
-                        widget["settings"] = {"limit": 6, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
+                        widget["settings"] = {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
+                    if widget.get("type") == "spl":
+                        widget["settings"] = {"green_max": 75, "orange_max": 85, "reports_enabled": True, **widget.get("settings", {})}
             return baseline
 
     def save(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -130,4 +144,10 @@ class ConfigStore:
         pc = settings.get("planning_center", {})
         pc["secret_configured"] = bool(pc.get("secret"))
         pc["secret"] = ""
+        restream = settings.get("restream", {})
+        restream["access_token_configured"] = bool(restream.get("access_token"))
+        restream["client_secret_configured"] = bool(restream.get("client_secret"))
+        restream["access_token"] = ""
+        restream["client_secret"] = ""
+        restream["refresh_token"] = ""
         return settings

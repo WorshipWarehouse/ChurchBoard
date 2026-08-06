@@ -8,9 +8,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from app.models import Dashboard
-from app.services.planning_center import PlanningCenterClient, calculate_timing, item_leader, position_key, selected_service_time, service_items
+from app.services.planning_center import PlanningCenterClient, calculate_timing, consolidate_people, item_leader, position_key, selected_service_time, service_items
 from app.services.shure import ShureClient, battery_percent, percent, transmitter_active
+from app.services.sennheiser import parse_ssc_response, ssc_request
 from app.services.propresenter import ProPresenterClient
+from app.services.restream import RestreamClient
 from app.services.runtime import RuntimeService
 from app.store import ConfigStore
 
@@ -22,8 +24,10 @@ class StoreTests(unittest.TestCase):
             self.assertEqual([item["slug"] for item in store.load()["dashboards"]], ["main", "green-room", "audio"])
             self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["type"], "assignments")
             self.assertEqual(store.load()["dashboards"][2]["widgets"][3]["settings"]["display_mode"], "technical")
+            self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["card_grouping"], "person")
             self.assertFalse(store.load()["dashboards"][0]["widgets"][3]["settings"]["use_planning_center_icon"])
             self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["unassigned_media_title"], "Icon")
+            self.assertEqual(store.load()["dashboards"][0]["widgets"][5]["settings"]["display_mode"], "current")
             self.assertEqual(store.load()["dashboards"][0]["background_color"], "#0a0d12")
             slides = store.load()["dashboards"][0]["widgets"][4]["settings"]
             self.assertEqual(slides["slide_layout"], "full")
@@ -52,15 +56,54 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(widget["type"], "assignments")
             self.assertEqual(widget["title"], "Scheduled Positions & Mics")
 
+    def test_order_widget_migrates_to_current_display_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "state.json")
+            data = store.load()
+            data["dashboards"][0]["widgets"][5]["settings"].pop("display_mode")
+            store.save(data)
+            self.assertEqual(store.load()["dashboards"][0]["widgets"][5]["settings"]["display_mode"], "current")
+
+    def test_assignment_widget_migrates_to_person_card_grouping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "state.json")
+            data = store.load()
+            data["dashboards"][0]["widgets"][3]["settings"].pop("card_grouping")
+            store.save(data)
+            self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["card_grouping"], "person")
+
     def test_public_settings_never_returns_secret(self):
         with tempfile.TemporaryDirectory() as directory:
             store = ConfigStore(Path(directory) / "state.json")
             data = store.load()
             data["settings"]["planning_center"]["secret"] = "do-not-return"
+            data["settings"]["restream"]["access_token"] = "also-do-not-return"
             store.save(data)
             public = store.public_settings()["planning_center"]
             self.assertEqual(public["secret"], "")
             self.assertTrue(public["secret_configured"])
+            restream = store.public_settings()["restream"]
+            self.assertEqual(restream["access_token"], "")
+            self.assertTrue(restream["access_token_configured"])
+
+    def test_restream_client_normalizes_live_event_and_destinations(self):
+        client = RestreamClient({"enabled": True, "access_token": "token"})
+        responses = {
+            "/user/events/in-progress": [{"id": "event-1", "title": "Sunday Worship", "startedAt": 1, "destinations": [{"channelId": 12}]}],
+            "/user/events/upcoming?scheduled=true": [],
+            "/user/channels": {"channels": [{"id": 12, "displayName": "YouTube", "platformId": 5}, {"id": 13, "displayName": "Facebook", "platformId": 14}]},
+            "/user/events/event-1/analytics/viewers": {"total": {"viewersPerMinute": [{"timestamp": 1, "viewers": 42}]}},
+        }
+
+        async def request(path):
+            return responses[path]
+
+        client._request = request
+        status = asyncio.run(client.status())
+        self.assertEqual(status["status"], "live")
+        self.assertEqual(status["viewers"], 42)
+        self.assertEqual(status["destinations"][0]["status"], "healthy")
+        self.assertEqual(status["destinations"][1]["status"], "offline")
 
 
 class DashboardTests(unittest.TestCase):
@@ -76,6 +119,15 @@ class DashboardTests(unittest.TestCase):
 
 
 class PlanningCenterTests(unittest.TestCase):
+    def test_consolidate_people_keeps_one_person_and_all_positions_in_plan_order(self):
+        people = consolidate_people([
+            {"id": "plan-1", "person_id": "caleb", "name": "Caleb Hines", "position": "Acoustic Guitar", "position_key": "band::acoustic guitar", "team_id": "band", "team_name": "Band", "photo": "", "status": "C"},
+            {"id": "plan-2", "person_id": "caleb", "name": "Caleb Hines", "position": "Vocals", "position_key": "band::vocals", "team_id": "band", "team_name": "Band", "photo": "", "status": "C"},
+        ])
+        self.assertEqual(len(people), 1)
+        self.assertEqual([position["name"] for position in people[0]["positions"]], ["Acoustic Guitar", "Vocals"])
+        self.assertEqual(people[0]["position_keys"], ["band::acoustic guitar", "band::vocals"])
+
     def test_manual_plan_wins(self):
         client = PlanningCenterClient({"open_days_before": 0, "open_hours_before": 0, "close_hours_after": 0})
         plans = [{"id": "1", "service_type_id": "a", "starts_at": "2030-01-01T00:00:00+00:00"}, {"id": "2", "service_type_id": "b", "starts_at": "2030-01-02T00:00:00+00:00"}]
@@ -360,6 +412,24 @@ class ShureStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mic["errors"], ["Transmitter off"])
 
 
+class SennheiserTests(unittest.TestCase):
+    def test_ssc_request_queries_dashboard_telemetry(self):
+        request = ssc_request([1, 2])
+        self.assertIsNone(request["m"]["rx1"]["rssi"])
+        self.assertIsNone(request["mates"]["tx2"]["battery"]["gauge"])
+
+    def test_ssc_response_normalizes_ew_dx_telemetry_and_alerts(self):
+        response = {"device": {"product": "EW-DX EM 2", "firmware": "3.0.0"}, "rx1": {"name": "Vox", "frequency": 548250}, "m": {"rx1": {"rsqi": 15, "af": -30}}, "mates": {"tx1": {"mute": True, "battery": {"gauge": 9, "lifetime": 25}, "warnings": ["AfPeak"]}}}
+        mic = parse_ssc_response(response, {"id": "ewdx", "name": "EW-DX"}, [1])[0]
+        self.assertTrue(mic["online"])
+        self.assertTrue(mic["muted"])
+        self.assertEqual(mic["battery_percent"], 9)
+        self.assertEqual(mic["rf"], 15)
+        self.assertEqual(mic["frequency"], "548.250 MHz")
+        self.assertIn("Low battery", mic["errors"])
+        self.assertIn("Weak RF signal", mic["errors"])
+
+
 class RuntimeAssignmentTests(unittest.TestCase):
     def test_live_mode_without_configured_mics_drops_seeded_demo_telemetry(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -380,6 +450,15 @@ class RuntimeAssignmentTests(unittest.TestCase):
         }
         RuntimeService._apply_assignments(state, {"band::vox 1": "blue"})
         self.assertEqual(state["mics"][0]["assignment"]["name"], "Jordan Lee")
+
+    def test_each_position_mic_maps_to_the_same_consolidated_person(self):
+        person = {"person_id": "caleb", "name": "Caleb Hines", "position": "Acoustic Guitar", "position_key": "band::acoustic guitar", "position_keys": ["band::acoustic guitar", "band::vocals"], "positions": [{"name": "Acoustic Guitar", "key": "band::acoustic guitar"}, {"name": "Vocals", "key": "band::vocals"}]}
+        state = {"people": [person], "mics": [{"id": "instrument", "name": "Instrument"}, {"id": "vocal", "name": "Vocal"}]}
+        RuntimeService._apply_assignments(state, {"band::acoustic guitar": "instrument", "band::vocals": "vocal"})
+        self.assertEqual(state["mics"][0]["assignment"]["person_id"], "caleb")
+        self.assertEqual(state["mics"][1]["assignment"]["person_id"], "caleb")
+        self.assertEqual(state["mics"][0]["assignment"]["position_key"], "band::acoustic guitar")
+        self.assertEqual(state["mics"][1]["assignment"]["position_key"], "band::vocals")
 
     def test_unfilled_mapped_position_keeps_its_filter_key(self):
         state = {"people": [], "mics": [{"id": "blue", "name": "Blue"}]}

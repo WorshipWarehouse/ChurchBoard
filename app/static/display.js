@@ -1,24 +1,9 @@
 let dashboard,lastState={},serverInstance="",refreshInFlight=false,planOptionsKey="",planSelectionInFlight=false,lastFullRefresh=0,compactEtag="";
 const widgetRenderKeys=new Map();
+const orderScrollPositions=new Map();
 const objectIds=new WeakMap();let nextObjectId=1;
 const slug=decodeURIComponent(location.pathname.split("/").pop());
-const splEngine={context:null,analyser:null,bins:null,stream:null,running:false,autoAttempted:false,rawDb:null};
-const aWeighting=frequency=>{if(frequency<=0)return-120;const f2=frequency*frequency,numerator=(12200**2)*(f2**2),denominator=(f2+20.6**2)*Math.sqrt((f2+107.7**2)*(f2+737.9**2))*(f2+12200**2);return 20*Math.log10(numerator/denominator)+2};
-function setSplStatus(message){document.querySelectorAll("[data-spl-status]").forEach(element=>element.textContent=message)}
-async function startSpl(){
-  if(splEngine.running){if(splEngine.context?.state==="suspended")await splEngine.context.resume();return}
-  if(!navigator.mediaDevices?.getUserMedia){setSplStatus("Microphone input is not supported in this browser");return}
-  try{
-    splEngine.stream=await navigator.mediaDevices.getUserMedia({audio:{autoGainControl:false,echoCancellation:false,noiseSuppression:false}});splEngine.context=new(window.AudioContext||window.webkitAudioContext)();const source=splEngine.context.createMediaStreamSource(splEngine.stream);splEngine.analyser=splEngine.context.createAnalyser();splEngine.analyser.fftSize=4096;splEngine.analyser.smoothingTimeConstant=.72;splEngine.bins=new Float32Array(splEngine.analyser.frequencyBinCount);source.connect(splEngine.analyser);splEngine.running=true;setSplStatus("Live A-weighted microphone level");requestAnimationFrame(updateSpl)
-  }catch(error){setSplStatus(error.name==="NotAllowedError"?"Microphone permission was denied":"Could not open the microphone")}
-}
-function updateSpl(){
-  if(!splEngine.running)return;splEngine.analyser.getFloatFrequencyData(splEngine.bins);let weightedPower=0;const binWidth=splEngine.context.sampleRate/splEngine.analyser.fftSize;
-  for(let index=1;index<splEngine.bins.length;index++){const db=splEngine.bins[index];if(Number.isFinite(db))weightedPower+=10**((db+aWeighting(index*binWidth))/10)}
-  const measured=weightedPower>0?10*Math.log10(weightedPower):-120;splEngine.rawDb=splEngine.rawDb===null?measured:splEngine.rawDb*.78+measured*.22;
-  document.querySelectorAll("[data-spl-meter]").forEach(meter=>{const value=Math.max(0,splEngine.rawDb+Number(meter.dataset.calibration||0)),green=Number(meter.dataset.green),orange=Number(meter.dataset.orange),reading=meter.querySelector("[data-spl-value]");reading.textContent=value.toFixed(1);meter.classList.toggle("spl-green",value<=green);meter.classList.toggle("spl-orange",value>green&&value<=orange);meter.classList.toggle("spl-red",value>orange);const status=meter.querySelector("[data-spl-status]");if(status)status.textContent="Live A-weighted microphone level"});requestAnimationFrame(updateSpl)
-}
-function maybeAutoStartSpl(){if(splEngine.running||splEngine.autoAttempted)return;if(document.querySelector('[data-spl-meter][data-auto="true"]')){splEngine.autoAttempted=true;startSpl()}}
+function updateNativeSpl(){const osm=lastState.osm||{};document.querySelectorAll("[data-spl-meter]").forEach(meter=>{const value=Number(osm[meter.dataset.osmKey||"a_fast"]),green=Number(meter.dataset.green),orange=Number(meter.dataset.orange),reading=meter.querySelector("[data-spl-value]"),status=meter.querySelector("[data-spl-status]");if(!osm.connected||!Number.isFinite(value)){if(reading)reading.textContent="--";if(status)status.textContent="Waiting for Open Sound Meter";meter.classList.remove("spl-green","spl-orange","spl-red");return}if(reading)reading.textContent=value.toFixed(1);meter.classList.toggle("spl-green",value<=green);meter.classList.toggle("spl-orange",value>green&&value<=orange);meter.classList.toggle("spl-red",value>orange);if(status)status.textContent=`${osm.source_name||"OSM source"} · ${meter.dataset.osmLabel||"level"}`})}
 async function loadBoard(){
   dashboard=await api(`/api/dashboards/${encodeURIComponent(slug)}`);
   document.title=`${dashboard.name} · ChurchBoard`;
@@ -68,16 +53,18 @@ function render(){
     const id=String(widget.id),renderKey=widgetStateKey(widget,lastState);
     activeIds.add(id);
     if(widgetRenderKeys.get(id)===renderKey&&existing.has(id))continue;
+    const current=existing.get(id),previousList=current?.querySelector(".full-service-order-list");if(previousList)orderScrollPositions.set(id,previousList.scrollTop);
     const markup=widgetMarkup(widget,lastState);
-    const template=document.createElement("template");template.innerHTML=markup.trim();const replacement=template.content.firstElementChild,current=existing.get(id);
+    const template=document.createElement("template");template.innerHTML=markup.trim();const replacement=template.content.firstElementChild;
     if(current)current.replaceWith(replacement);else root.append(replacement);
+    const replacementList=replacement.querySelector(".full-service-order-list"),savedScroll=orderScrollPositions.get(id);if(replacementList){if(savedScroll!==undefined)replacementList.scrollTop=savedScroll;replacementList.addEventListener("scroll",()=>orderScrollPositions.set(id,replacementList.scrollTop),{passive:true})}
     widgetRenderKeys.set(id,renderKey);changed=true;
   }
   for(const [id,element] of existing){if(!activeIds.has(id)){element.remove();widgetRenderKeys.delete(id);changed=true}}
   if(!widgets.length&&root.innerHTML!==`<div class="empty">This dashboard has no widgets.</div>`){root.innerHTML=`<div class="empty">This dashboard has no widgets.</div>`;changed=true}
   updateTimingWidgets();updateOrderTimingWidgets();
   if(changed){tickClocks();enhanceDynamicContent(root)}
-  maybeAutoStartSpl();
+  updateNativeSpl();
 }
 function objectId(value){if(!value||typeof value!=="object")return String(value);if(!objectIds.has(value))objectIds.set(value,nextObjectId++);return objectIds.get(value)}
 function leaderMicKey(mics){return(mics||[]).map(mic=>[mic.id,mic.name,mic.receiver,mic.assignment?.person_id,mic.assignment?.id,mic.assignment?.name,mic.assignment?.position_key])}
@@ -92,10 +79,13 @@ function widgetStateKey(widget,state){
   if(widget.type==="order")return`order:${objectId(timing.service_items||service.items)}:${objectId(state.people)}:${JSON.stringify(leaderMicKey(state.mics))}:${String(timing.current_item?.id||"")}:${timing.service_time_id||""}:${settings.show_leader!==false}:${settings.show_mic!==false}`;
   if(widget.type==="people"||widget.type==="person")return`${widget.type}:${objectId(state.people)}`;
   if(widget.type==="controls")return`controls:${JSON.stringify([state.planning_center_live||{},state.service_control||{},timing.current_item?.id,timing.current_item?.title])}`;
+  if(widget.type==="restream")return`restream:${JSON.stringify(state.restream||{})}`;
   return`${widget.type}:${JSON.stringify(state)}`;
 }
 function fitOrderService(root=document){
   root.querySelectorAll(".order-list").forEach(list=>{
+    if(list.classList.contains("full-service-order-list"))return;
+    if(list.classList.contains("full-service-order-fit-list")||list.classList.contains("current-service-order-list")){let low=.1,high=1,best=.1;for(let pass=0;pass<8;pass++){const scale=(low+high)/2;list.style.setProperty("--order-fit-scale",scale);if(list.scrollHeight<=list.clientHeight+1){best=scale;low=scale}else high=scale}list.style.setProperty("--order-fit-scale",best);return}
     const rows=[...list.querySelectorAll("li")];if(!rows.length)return;
     rows.forEach(row=>row.classList.remove("order-hidden"));
     const foundActive=rows.findIndex(row=>row.classList.contains("active")),activeIndex=foundActive>=0?foundActive:0,heights=rows.map(row=>Math.ceil(row.getBoundingClientRect().height)),available=Math.max(0,list.clientHeight-2),priority=[];
@@ -122,7 +112,7 @@ function updateOrderTimingWidgets(){
   document.querySelectorAll("[data-order-eta]").forEach(element=>{const value=Number.isFinite(start)?formatClockTime(new Date(start+Number(element.dataset.startsAfter||0)*1000+(adjusting?drift:0)*1000),lastState.timezone):"—";if(element.textContent!==value)element.textContent=value});
 }
 document.addEventListener("click",async event=>{
-  if(event.target.closest("[data-spl-start]")){await startSpl();return}
+  const orderJump=event.target.closest("[data-order-jump]");if(orderJump){const list=orderJump.closest(".order-layout")?.querySelector(".full-service-order-list");if(!list)return;const target=orderJump.dataset.orderJump;if(target==="start")list.scrollTo({top:0,behavior:"smooth"});else if(target==="end")list.scrollTo({top:list.scrollHeight,behavior:"smooth"});else list.querySelector("li.active")?.scrollIntoView({block:"center",behavior:"smooth"});return}
   const button=event.target.closest("[data-service-action]");if(!button)return;button.disabled=true;const status=button.closest(".service-controls")?.querySelector("[data-control-status]");if(status)status.textContent="Updating…";
   try{lastState=await api(`/api/service-control/${button.dataset.serviceAction}`,{method:"POST"});render();updatePlans()}catch(error){button.disabled=false;if(status)status.textContent=error.message}
 });

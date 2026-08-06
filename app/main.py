@@ -2,24 +2,29 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from copy import deepcopy
+from datetime import datetime, timezone
 from hashlib import sha256
 import ipaddress
 import json
+import secrets
 import threading
 from uuid import uuid4
 from zoneinfo import available_timezones
 
 import uvicorn
+import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.config import ROOT_DIR, load_config
 from app.models import Dashboard, SettingsUpdate
 from app.services.runtime import RuntimeService
+from app.services.spl_reports import SPLReportStore
 from app.services.planning_center import PlanningCenterClient
 from app.services.propresenter import ProPresenterClient
+from app.services.restream import RestreamClient
 from app.store import ConfigStore
 from app.update import download_update, update_status
 from app.version import __version__
@@ -30,11 +35,29 @@ class ActivePlanRequest(BaseModel):
     service_type_id: str | None = None
 
 
+class OSMMeasurement(BaseModel):
+    laeq: float | None = None
+    lceq: float | None = None
+    lzeq: float | None = None
+    peak: float | None = None
+    fast: float | None = None
+    slow: float | None = None
+    a_fast: float | None = None
+    a_slow: float | None = None
+    b_fast: float | None = None
+    b_slow: float | None = None
+    c_fast: float | None = None
+    c_slow: float | None = None
+    z_fast: float | None = None
+    z_slow: float | None = None
+    timestamp: str | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = load_config()
     store = ConfigStore(config.data_file)
-    runtime = RuntimeService(store)
+    runtime = RuntimeService(store, SPLReportStore(config.data_file.with_name("spl-samples.jsonl")))
     app.state.instance_id = uuid4().hex
     app.state.store = store
     app.state.runtime = runtime
@@ -155,6 +178,10 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     existing_secret = data["settings"].get("planning_center", {}).get("secret", "")
     if not settings.get("planning_center", {}).get("secret"):
         settings.setdefault("planning_center", {})["secret"] = existing_secret
+    existing_restream = data["settings"].get("restream", {})
+    for secret_name in ("client_secret", "access_token", "refresh_token"):
+        if not settings.get("restream", {}).get(secret_name):
+            settings.setdefault("restream", {})[secret_name] = existing_restream.get(secret_name, "")
     data["settings"] = settings
     store.save(data)
     await request.app.state.runtime.refresh(force=True)
@@ -180,6 +207,8 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
             "propresenter",
             "planning_center_live",
             "service_control",
+            "osm",
+            "restream",
         )
     }
     encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
@@ -187,6 +216,50 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers={"ETag": etag})
     return Response(encoded, media_type="application/json", headers={"ETag": etag})
+
+
+@app.post("/api/integrations/osm/measurement", status_code=202)
+async def ingest_osm_measurement(payload: OSMMeasurement, request: Request) -> dict:
+    measurement = payload.model_dump(exclude_none=True)
+    if not any(key in measurement for key in ("laeq", "lceq", "lzeq", "peak", "fast", "slow", "a_fast", "a_slow", "b_fast", "b_slow", "c_fast", "c_slow", "z_fast", "z_slow")):
+        raise HTTPException(400, "Measurement does not contain an SPL level")
+    runtime = request.app.state.runtime
+    runtime.record_spl_measurement(measurement)
+    runtime.state["osm"] = {"connected": True, "last_measurement_at": measurement.get("timestamp"), **measurement}
+    return {"accepted": True}
+
+
+@app.post("/api/integrations/osm/test")
+async def test_osm_connection(request: Request) -> dict:
+    settings = store_from(request).load()["settings"].get("open_sound_meter", {})
+    if not settings.get("enabled"):
+        raise HTTPException(400, "Enable Open Sound Meter monitoring and save settings first")
+    osm = request.app.state.runtime.state.get("osm") or {}
+    timestamp = str(osm.get("last_measurement_at") or "")
+    try:
+        age = max(0, (datetime.now(timezone.utc) - datetime.fromisoformat(timestamp.replace("Z", "+00:00"))).total_seconds())
+    except ValueError:
+        age = None
+    if osm.get("connected") and age is not None and age <= 3:
+        return {"connected": True, "age_seconds": round(age, 1), "message": f"Receiving OSM levels · A Fast {float(osm.get('a_fast', osm.get('laeq'))):.1f} dBA"}
+    return {"connected": False, "message": "No recent valid OSM level packet. Confirm OSM Remote API Server and multicast network access."}
+
+
+@app.get("/api/reports/services")
+async def list_spl_report_services(request: Request) -> dict:
+    return {"items": request.app.state.runtime.spl_reports.services()}
+
+
+@app.get("/api/reports/services/{service_id}/spl-averages.csv")
+async def download_spl_averages(service_id: str, request: Request) -> PlainTextResponse:
+    content = request.app.state.runtime.spl_reports.csv(service_id)
+    return PlainTextResponse(content, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="churchboard-{service_id}-spl-averages.csv"'})
+
+
+@app.get("/api/reports/services/{service_id}/spl-graph.html")
+async def download_spl_graph(service_id: str, request: Request) -> Response:
+    content = request.app.state.runtime.spl_reports.graph_html(service_id)
+    return Response(content, media_type="text/html", headers={"Content-Disposition": f'attachment; filename="churchboard-{service_id}-spl-graph.html"'})
 
 
 @app.get("/api/app-info")
@@ -277,6 +350,60 @@ async def test_planning_center(request: Request) -> dict:
     except Exception as exc:
         raise HTTPException(502, f"Planning Center connection failed: {exc}") from exc
     return {"connected": True, "items": service_types, "count": len(service_types)}
+
+
+@app.post("/api/integrations/restream/test")
+async def test_restream(request: Request) -> dict:
+    client = RestreamClient(store_from(request).load()["settings"].get("restream", {}))
+    try:
+        return await client.test_connection()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(exc.response.status_code, "Restream rejected the access token") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Restream connection failed: {exc}") from exc
+    finally:
+        await client.close()
+
+
+RESTREAM_CALLBACK_PATH = "/api/integrations/restream/callback"
+
+
+@app.get("/api/integrations/restream/connect")
+async def connect_restream(request: Request) -> RedirectResponse:
+    settings = store_from(request).load()["settings"].get("restream", {})
+    if not settings.get("client_id") or not settings.get("client_secret"):
+        raise HTTPException(400, "Save the Restream Client ID and Client Secret first")
+    state = secrets.token_urlsafe(32)
+    request.app.state.restream_oauth_state = state
+    callback = str(request.base_url).rstrip("/") + RESTREAM_CALLBACK_PATH
+    from urllib.parse import urlencode
+    query = urlencode({"response_type": "code", "client_id": settings["client_id"], "redirect_uri": callback, "state": state})
+    return RedirectResponse(f"https://api.restream.io/login?{query}")
+
+
+@app.get(RESTREAM_CALLBACK_PATH)
+async def restream_callback(request: Request, code: str = "", state: str = "") -> RedirectResponse:
+    expected_state = getattr(request.app.state, "restream_oauth_state", "")
+    request.app.state.restream_oauth_state = ""
+    if not code:
+        return RedirectResponse("/admin?restream=denied")
+    if not expected_state or not secrets.compare_digest(state, expected_state):
+        raise HTTPException(400, "Invalid Restream OAuth state; please try connecting again")
+    store = store_from(request)
+    data = store.load()
+    restream = data["settings"].get("restream", {})
+    client = RestreamClient(restream)
+    try:
+        token = await client.exchange_code(code, str(request.base_url).rstrip("/") + RESTREAM_CALLBACK_PATH)
+    except Exception as exc:
+        raise HTTPException(502, f"Restream authorization failed: {exc}") from exc
+    finally:
+        await client.close()
+    restream.update({"enabled": True, "access_token": token.get("access_token") or token.get("accessToken") or "", "refresh_token": token.get("refresh_token") or token.get("refreshToken") or "", "access_token_expires_at": token.get("expires") or token.get("accessTokenExpiresEpoch") or 0})
+    data["settings"]["restream"] = restream
+    store.save(data)
+    await request.app.state.runtime.refresh(force=True)
+    return RedirectResponse("/admin?restream=connected")
 
 
 @app.get("/api/integrations/planning-center/catalog")

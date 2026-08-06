@@ -12,16 +12,21 @@ from typing import Any
 from app.services.planning_center import PlanningCenterClient, calculate_timing, parse_time, service_items
 from app.services.propresenter import ProPresenterClient
 from app.services.shure import ShureClient
+from app.services.sennheiser import SennheiserClient
+from app.services.spl_reports import SPLReportStore
+from app.services.osm import OSMListener
+from app.services.restream import RestreamClient
 from app.store import ConfigStore
 
 
 class RuntimeService:
-    def __init__(self, store: ConfigStore):
+    def __init__(self, store: ConfigStore, spl_reports: SPLReportStore | None = None):
         self.store = store
+        self.spl_reports = spl_reports or SPLReportStore(store.path.with_name("spl-samples.jsonl"))
         self.state: dict[str, Any] = self.demo_state()
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
-        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0}
+        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0, "sennheiser": 0.0, "restream": 0.0}
         self._service_control: dict[str, Any] = {"active": False}
         self._pp_live_candidate = ""
         self._pp_live_candidate_since = 0.0
@@ -31,7 +36,62 @@ class RuntimeService:
         self._propresenter_client: ProPresenterClient | None = None
         self._propresenter_key: tuple[Any, ...] | None = None
         self._planning_center_detail_task: asyncio.Task | None = None
+        self._osm_listener = OSMListener(self.record_osm_measurement)
+        self._osm_sources: dict[str, dict[str, Any]] = {}
+        self._osm_auto_source_key = ""
+        self._restream_client: RestreamClient | None = None
+        self._restream_key: tuple[Any, ...] | None = None
 
+    def record_spl_measurement(self, measurement: dict[str, Any], metric_key: str = "a_fast", metric_label: str = "A-weighted Fast") -> None:
+        """Persist a normalized bridge reading against the current LIVE item."""
+        state = self.state
+        self.spl_reports.record(measurement, state.get("service") or {}, (state.get("timing") or {}).get("current_item"), metric_key, metric_label)
+
+    def record_osm_measurement(self, measurement: dict[str, Any]) -> None:
+        osm_settings = self.store.load()["settings"].get("open_sound_meter", {})
+        reports_enabled = bool(osm_settings.get("reports_enabled", True))
+        weighting = str(osm_settings.get("report_weighting") or "A").upper()
+        response = str(osm_settings.get("report_response") or "Fast").capitalize()
+        if weighting not in {"A", "B", "C", "Z"}:
+            weighting = "A"
+        if response not in {"Fast", "Slow"}:
+            response = "Fast"
+        metric_key = f"{weighting.lower()}_{response.lower()}"
+        metric_label = f"{weighting}-weighted {response}"
+        source_id = str(measurement.get("source_id") or "")
+        source_host = str(measurement.get("source_host") or "")
+        source_key = f"{source_host}:{source_id}" if source_host else source_id
+        if not source_key:
+            source_key = "legacy"
+        self._osm_sources[source_key] = {**measurement, "source_key": source_key}
+        configured_source = str(osm_settings.get("source_id") or "")
+        if not self._osm_auto_source_key:
+            self._osm_auto_source_key = source_key
+        selected_key = configured_source or self._osm_auto_source_key
+        selected = self._osm_sources.get(selected_key)
+        if selected is None:
+            current = self.state.get("osm") or {}
+            self.state["osm"] = {**current, "connected": False, "message": "The selected OSM source is not currently sending levels", "sources": self._osm_source_catalog(metric_key), "selected_source_id": selected_key}
+            return
+        if source_key != selected["source_key"]:
+            current = self.state.get("osm") or {}
+            self.state["osm"] = {**current, "sources": self._osm_source_catalog(metric_key), "selected_source_id": selected["source_key"]}
+            return
+        if reports_enabled:
+            self.record_spl_measurement(selected, metric_key, metric_label)
+        self.state["osm"] = {"connected": True, "reports_enabled": reports_enabled, "report_metric_key": metric_key, "report_metric_label": metric_label, "selected_source_id": selected["source_key"], "sources": self._osm_source_catalog(metric_key), "last_measurement_at": selected.get("timestamp"), **selected}
+
+    def _osm_source_catalog(self, metric_key: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": source["source_key"],
+                "name": source.get("source_name") or source["source_key"],
+                "host": source.get("source_host") or "",
+                "level": source.get(metric_key),
+                "updated_at": source.get("timestamp"),
+            }
+            for source in self._osm_sources.values()
+        ]
     async def start(self) -> None:
         self._stop.clear()
         self._task = asyncio.create_task(self._run())
@@ -47,6 +107,9 @@ class RuntimeService:
         if self._propresenter_client is not None:
             await self._propresenter_client.close()
             self._propresenter_client = None
+        if self._restream_client is not None:
+            await self._restream_client.close()
+            self._restream_client = None
         if self._planning_center_detail_task is not None:
             self._planning_center_detail_task.cancel()
             try:
@@ -54,6 +117,7 @@ class RuntimeService:
             except asyncio.CancelledError:
                 pass
             self._planning_center_detail_task = None
+        await self._osm_listener.close()
 
     async def _run(self) -> None:
         while not self._stop.is_set():
@@ -66,6 +130,24 @@ class RuntimeService:
     async def refresh(self, force: bool = False) -> dict[str, Any]:
         stored_data = self.store.load()
         config = stored_data["settings"]
+        osm_settings = config.get("open_sound_meter", {})
+        if osm_settings.get("enabled"):
+            try:
+                await self._osm_listener.configure(osm_settings)
+                self.state.setdefault("osm", {"connected": False, "message": "Waiting for OSM multicast data"})
+                osm_state = self.state.get("osm") or {}
+                last_measurement = str(osm_state.get("last_measurement_at") or "")
+                if osm_state.get("connected") and last_measurement:
+                    try:
+                        age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_measurement.replace("Z", "+00:00"))).total_seconds()
+                    except ValueError:
+                        age = 0
+                    if age > 3:
+                        self.state["osm"] = {**osm_state, "connected": False, "message": "The selected OSM source stopped sending levels"}
+            except OSError as exc:
+                self.state["osm"] = {"connected": False, "message": f"Could not join OSM multicast: {exc}"}
+        else:
+            await self._osm_listener.close()
         configured_media_titles = self._configured_media_titles(stored_data)
         if config.get("demo_mode"):
             demo = deepcopy(self.state) if self.state.get("service", {}).get("id") == "demo" else self.demo_state()
@@ -75,6 +157,7 @@ class RuntimeService:
             demo["timing"] = calculate_timing(demo.get("service"))
             demo["manual_plan"] = config.get("manual_plan")
             demo["planning_center_live"] = {"enabled": bool((config.get("planning_center", {}).get("live_from_propresenter") or {}).get("enabled")), "state": "demo", "message": "Services LIVE automation is available when demonstration data is off"}
+            demo["restream"] = {"connected": False, "status": "offline", "title": "Restream monitoring is unavailable in demo mode", "destinations": []}
             self._apply_service_control(demo)
             self.state = demo
             return self.state
@@ -207,15 +290,50 @@ class RuntimeService:
             self._last_live = None
             self._rehearsal_clock = {}
         shure = ShureClient(config.get("shure", {}))
+        sennheiser = SennheiserClient(config.get("sennheiser", {}))
         shure_due = clock - self._last_refresh["shure"] >= float(config.get("shure", {}).get("refresh_seconds", 0.5))
-        if shure.configured and (force or shure_due):
-            next_state["mics"] = await shure.status()
+        sennheiser_due = clock - self._last_refresh["sennheiser"] >= float(config.get("sennheiser", {}).get("refresh_seconds", 0.5))
+        if (shure.configured and (force or shure_due)) or (sennheiser.configured and (force or sennheiser_due)):
+            shure_status, sennheiser_status = await asyncio.gather(
+                shure.status() if shure.configured else asyncio.sleep(0, result=[]),
+                sennheiser.status() if sennheiser.configured else asyncio.sleep(0, result=[]),
+            )
+            next_state["mics"] = shure_status + sennheiser_status
             self._last_refresh["shure"] = clock
-        elif not shure.configured:
+            self._last_refresh["sennheiser"] = clock
+        elif not shure.configured and not sennheiser.configured:
             # Runtime starts with demonstration content so the first launch is
             # useful. Once demo mode is off, never carry those sample mics into
-            # a real Planning Center plan that has no Shure configuration.
+            # a real Planning Center plan that has no wireless configuration.
             next_state["mics"] = []
+        restream_settings = config.get("restream", {})
+        expires_at = float(restream_settings.get("access_token_expires_at") or 0)
+        if restream_settings.get("refresh_token") and expires_at and expires_at <= datetime.now(timezone.utc).timestamp() + 120:
+            refresh_client = RestreamClient(restream_settings)
+            try:
+                token = await refresh_client.refresh_access_token()
+                restream_settings.update({"access_token": token.get("access_token") or token.get("accessToken") or "", "refresh_token": token.get("refresh_token") or token.get("refreshToken") or "", "access_token_expires_at": token.get("expires") or token.get("accessTokenExpiresEpoch") or 0})
+                stored_data["settings"]["restream"] = restream_settings
+                self.store.save(stored_data)
+            except Exception as exc:
+                next_state["restream"] = {"connected": False, "status": "offline", "title": "Restream authorization expired", "destinations": [], "error": str(exc)}
+            finally:
+                await refresh_client.close()
+        restream_key = (bool(restream_settings.get("enabled")), str(restream_settings.get("access_token") or ""))
+        if self._restream_client is None or restream_key != self._restream_key:
+            if self._restream_client is not None:
+                await self._restream_client.close()
+            self._restream_client = RestreamClient(restream_settings)
+            self._restream_key = restream_key
+        restream_due = clock - self._last_refresh["restream"] >= max(2.0, float(restream_settings.get("refresh_seconds", 5)))
+        if self._restream_client.configured and (force or restream_due):
+            self._last_refresh["restream"] = clock
+            try:
+                next_state["restream"] = await self._restream_client.status()
+            except Exception as exc:
+                next_state["restream"] = {"connected": False, "status": "offline", "title": "Restream unavailable", "destinations": [], "error": str(exc)}
+        elif not self._restream_client.configured:
+            next_state["restream"] = {"connected": False, "status": "offline", "title": "Restream is not connected", "destinations": []}
         self._apply_assignments(next_state, config.get("position_mic_map", {}))
         self._apply_service_control(next_state)
         self.state = next_state
@@ -716,6 +834,13 @@ class RuntimeService:
                 people[position] = person
             if position_key:
                 people[position_key] = person
+            for scheduled_position in person.get("positions") or []:
+                scheduled_key = str(scheduled_position.get("key") or "").strip()
+                scheduled_name = str(scheduled_position.get("name") or "").strip().casefold()
+                if scheduled_key:
+                    people[scheduled_key] = person
+                if scheduled_name:
+                    people[scheduled_name] = person
         mic_by_id = {mic.get("id"): mic for mic in state.get("mics", [])}
         for position, mic_id in mapping.items():
             if mic_id in mic_by_id:
@@ -724,7 +849,14 @@ class RuntimeService:
                 fallback_position = lookup.split("::", 1)[-1] if "::" in lookup else lookup
                 fallback_team = lookup.split("::", 1)[0] if "::" in lookup else ""
                 person = person or {"name": "Unassigned", "photo": "", "position": fallback_position, "position_key": lookup, "team_id": fallback_team}
-                mic_by_id[mic_id]["assignment"] = {"position": fallback_position, "position_key": lookup, **person}
+                # Retain the consolidated person's complete role list while
+                # attaching this microphone to the exact configured role.
+                mic_by_id[mic_id]["assignment"] = {
+                    **person,
+                    "position": fallback_position,
+                    "position_key": lookup,
+                    "team_id": fallback_team or person.get("team_id", ""),
+                }
 
     @staticmethod
     def _configured_media_titles(data: dict[str, Any]) -> list[str]:
