@@ -113,6 +113,7 @@ document.querySelector("#mic-manager").addEventListener("click",event=>{const bu
 
 const dialog=document.querySelector("#new-dialog");
 document.querySelector("#new-dashboard").onclick=()=>dialog.showModal();
+document.querySelector("#cancel-dashboard").onclick=()=>{dialog.querySelector("form").reset();dialog.close("cancel")};
 dialog.querySelector("[name=name]").addEventListener("input",e=>{dialog.querySelector("[name=slug]").value=e.target.value.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")});
 document.querySelector("#create-dashboard").addEventListener("click",async event=>{event.preventDefault();const name=dialog.querySelector("[name=name]").value.trim(),slug=dialog.querySelector("[name=slug]").value.trim();if(!name||!slug)return;try{await api("/api/dashboards",{method:"POST",body:JSON.stringify({id:slug,name,slug,background_color:"#0a0d12",columns:12,row_height:72,widgets:[]})});dialog.close();location.href=`/editor/${encodeURIComponent(slug)}`}catch(error){alert(error.message)}});
 
