@@ -18,7 +18,7 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 ## What ChurchBoard shows
 
 - Photo-forward scheduled-position and microphone cards, including unassigned positions and a per-widget choice between one card per person or one card per position
-- Shure QLX-D/ULX-D and Sennheiser EW-DX battery, RF/audio, transmitter, mute, warning, and online/offline status
+- Shure QLX-D/ULX-D/SLX-D and Sennheiser EW-DX battery, RF/audio, transmitter, mute, warning, and online/offline status
 - Current and next ProPresenter slides as text or slide images, with live countdown overlays and video playback progress
 - A scrollable ProPresenter playlist that shows every playlist item, placeholder, presentation, section marker, and slide thumbnail; trusted operators can trigger a presentation or individual slide from ChurchBoard
 - ProPresenter item title, part labels and colors, slide number, and notes

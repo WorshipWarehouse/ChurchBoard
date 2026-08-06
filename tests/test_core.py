@@ -376,6 +376,14 @@ class ShureTests(unittest.TestCase):
         self.assertEqual(len(receivers), 1)
         self.assertEqual([mic["id"] for mic in receivers[0]["channel_configs"]], ["blue", "red"])
 
+    def test_slxd_mic_uses_the_shure_tcp_receiver_and_keeps_its_model(self):
+        client = ShureClient({"enabled": True, "mics": [
+            {"id": "slxd-1", "name": "Pastor", "host": "192.168.1.70", "channel": 1, "model": "slxd"},
+        ]})
+        receiver = client._configured_receivers()[0]
+        self.assertEqual(receiver["port"], 2202)
+        self.assertEqual(receiver["model"], "slxd")
+
 
 class ShureStatusTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_tx_and_battery_sentinel_report_transmitter_off(self):
