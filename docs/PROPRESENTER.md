@@ -76,6 +76,20 @@ In ChurchBoard's dashboard editor, select a **ProPresenter** widget and choose:
 
 Part labels use their ProPresenter colors. If parts do not change with the slide, confirm the cues/groups in the presentation are named and colored in ProPresenter.
 
+ChurchBoard also publishes the active presentation as a slide-grid feed. Every
+cue includes its number, text, notes, ProPresenter part/color, active state,
+and a proxied thumbnail URL. This lets a Service Producer view present a
+section-aware grid beside the order of service without exposing the
+ProPresenter computer directly to browsers.
+
+## Remote slide triggering
+
+Remote triggering is deliberately disabled by default. In Setup, enable
+**Allow ChurchBoard to trigger ProPresenter slides** only for a trusted,
+authenticated production-network deployment. ChurchBoard's protected endpoint
+then triggers the selected zero-based cue in the active presentation; it never
+enables control merely because a dashboard is being viewed.
+
 When the active slide contains a ProPresenter timer element, ChurchBoard replaces its design-time placeholder with the currently running ProPresenter timer and composites that changing value over the otherwise static slide thumbnail. Video remaining time is kept separate and is never shown as a slide timer. For foreground video cues, ChurchBoard displays playing state, elapsed time, duration, and progress; looping motion backgrounds behind lyrics do not receive that overlay. ProPresenter's HTTP API exposes static cue/media thumbnails and transport information, but not live rendered audience-screen frames, so moving video cannot be reproduced from that API alone. A true moving preview would require a separate browser-compatible output stream from ProPresenter or a capture application such as OBS.
 
 ## 5. Let ProPresenter drive Planning Center Services LIVE

@@ -1049,6 +1049,136 @@ class ProPresenterTests(unittest.TestCase):
 
 
 class ProPresenterPollingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_playlist_loads_slides_for_every_presentation(self):
+        class FakeResponse:
+            def __init__(self, payload, status_code=200):
+                self.payload = payload
+                self.status_code = status_code
+                self.is_success = 200 <= status_code < 300
+
+            def json(self):
+                return self.payload
+
+            def raise_for_status(self):
+                if not self.is_success:
+                    raise RuntimeError(self.status_code)
+
+        class FakeHttp:
+            async def get(self, url):
+                if url.endswith("/v1/status/slide"):
+                    return FakeResponse({"current": {"text": "First song"}, "next": {"text": "First chorus"}})
+                if url.endswith("/v1/presentation/slide_index"):
+                    return FakeResponse(0)
+                if url.endswith("/v1/presentation/active"):
+                    return FakeResponse({"presentation": {"id": {"uuid": "PRES-1", "name": "Song One"}}})
+                if url.endswith("/v1/playlist/active") or url.endswith("/v1/playlist/focused"):
+                    return FakeResponse({"presentation": {"playlist": {"uuid": "PLAYLIST-1", "name": "Sunday"}, "item": {"name": "Song One", "index": 0}}})
+                if url.endswith("/v1/playlist/PLAYLIST-1"):
+                    return FakeResponse({"items": [
+                        {"id": {"index": 0, "name": "Song One"}, "type": "presentation", "presentation_info": {"presentation_uuid": "PRES-1"}},
+                        {"id": {"index": 1, "name": "Song Two"}, "type": "presentation", "presentation_info": {"presentation_uuid": "PRES-2"}},
+                    ]})
+                if url.endswith("/v1/presentation/PRES-1"):
+                    return FakeResponse({"id": {"uuid": "PRES-1", "name": "Song One"}, "groups": [{"name": "Verse", "slides": [{"text": "First song"}, {"text": "First chorus"}]}]})
+                if url.endswith("/v1/presentation/PRES-2"):
+                    return FakeResponse({"presentation": {"id": {"uuid": "PRES-2", "name": "Song Two"}, "groups": [{"name": "Verse", "slides": [{"text": "Second song"}]}, {"name": "Chorus", "slides": [{"text": "Second chorus"}]}]}})
+                return FakeResponse({})
+
+        client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 53528})
+        client._client = FakeHttp()
+        status = await client.status()
+        presentations = status["playlist_presentations"]
+        self.assertEqual([item["title"] for item in presentations], ["Song One", "Song Two"])
+        self.assertEqual([slide["text"] for slide in presentations[0]["slides"]], ["First song", "First chorus"])
+        self.assertEqual([slide["text"] for slide in presentations[1]["slides"]], ["Second song", "Second chorus"])
+        self.assertEqual(presentations[1]["slides"][1]["image_url"], "/api/integrations/propresenter/thumbnail/PRES-2/1")
+
+    async def test_non_active_playlist_slide_targets_its_presentation(self):
+        class FakeResponse:
+            status_code = 200
+            is_success = True
+
+        class FakeHttp:
+            def __init__(self):
+                self.calls = []
+
+            async def get(self, url):
+                self.calls.append(url)
+                return FakeResponse()
+
+        client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 53528})
+        fake_http = FakeHttp()
+        client._client = fake_http
+        await client.trigger_playlist_slide(6, "6378A556-8122-44B9-AFC7-C3BC7AEE5301", 2)
+        self.assertEqual(fake_http.calls, ["http://127.0.0.1:53528/v1/presentation/6378A556-8122-44B9-AFC7-C3BC7AEE5301/2/trigger"])
+
+    async def test_playlist_cue_uses_live_active_presentation_route(self):
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+        class FakeHttp:
+            def __init__(self):
+                self.calls = []
+
+            async def get(self, url):
+                self.calls.append(url)
+                return FakeResponse()
+
+        client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 53528})
+        fake_http = FakeHttp()
+        client._client = fake_http
+        await client.trigger_active_slide(4)
+        self.assertEqual(fake_http.calls, ["http://127.0.0.1:53528/v1/presentation/active/4/trigger"])
+
+    async def test_playlist_slide_trigger_targets_exact_presentation(self):
+        class FakeResponse:
+            is_success = True
+
+            def raise_for_status(self):
+                return None
+
+        class FakeHttp:
+            def __init__(self):
+                self.calls = []
+
+            async def get(self, url):
+                self.calls.append(url)
+                return FakeResponse()
+
+        client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 53528})
+        fake_http = FakeHttp()
+        client._client = fake_http
+        await client.trigger_presentation_slide("6378A556-8122-44B9-AFC7-C3BC7AEE5301", 3)
+        self.assertEqual(fake_http.calls, ["http://127.0.0.1:53528/v1/presentation/6378A556-8122-44B9-AFC7-C3BC7AEE5301/3/trigger"])
+
+    async def test_playlist_slide_trigger_falls_back_to_active_for_pco_uuid(self):
+        class FakeResponse:
+            def __init__(self, status_code):
+                self.status_code = status_code
+                self.is_success = 200 <= status_code < 300
+
+            def raise_for_status(self):
+                if not self.is_success:
+                    raise RuntimeError(self.status_code)
+
+        class FakeHttp:
+            def __init__(self):
+                self.calls = []
+
+            async def get(self, url):
+                self.calls.append(url)
+                return FakeResponse(404 if len(self.calls) == 1 else 200)
+
+        client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 53528})
+        fake_http = FakeHttp()
+        client._client = fake_http
+        await client.trigger_presentation_slide("B45CCDD5-A432-48AA-A7F1-0C1E2C238D5A", 2)
+        self.assertEqual(fake_http.calls, [
+            "http://127.0.0.1:53528/v1/presentation/B45CCDD5-A432-48AA-A7F1-0C1E2C238D5A/2/trigger",
+            "http://127.0.0.1:53528/v1/presentation/active/2/trigger",
+        ])
+
     async def test_fast_poll_reuses_presentation_metadata_and_omits_raw_payload(self):
         class FakeResponse:
             def __init__(self, payload):

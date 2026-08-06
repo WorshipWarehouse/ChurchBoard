@@ -47,6 +47,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn('id="delete-dashboard"', editor.text)
         self.assertIn('input name="show_title" type="checkbox"', editor.text)
         self.assertIn('select name="slide_layout"', editor.text)
+        self.assertIn('name="pp_remote_control_enabled"', admin.text)
+        self.assertIn('ProPresenter playlist', self.client.get("/static/common.js").text)
         self.assertIn('input name="show_parts" type="checkbox"', editor.text)
         self.assertNotIn('id="dashboard-theme"', editor.text)
         self.assertNotIn('target="_blank"', editor.text)
@@ -101,6 +103,20 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(saved_settings["position_keys"], ["band::vox 2", "band::vox 1"])
         self.assertEqual(saved_settings["position_labels"]["band::vox 2"]["name"], "Vox 2")
 
+    def test_existing_dashboards_gain_a_propresenter_playlist_widget(self):
+        board = self.client.get("/api/dashboards/main").json()
+        playlist = next(widget for widget in board["widgets"] if widget["type"] == "playlist")
+        self.assertTrue(playlist["settings"]["allow_remote_trigger"])
+        self.assertEqual(playlist["settings"]["slide_size"], 120)
+        self.assertEqual(playlist["settings"]["item_size"], 48)
+        self.assertEqual(playlist["settings"]["marker_size"], 10)
+        self.assertEqual(playlist["settings"]["active_border_color"], "#f5c400")
+        editor = self.client.get("/static/editor.js").text
+        self.assertIn("playlist_slide_size", editor)
+        self.assertIn("playlist_item_size", editor)
+        self.assertIn("playlist_marker_size", editor)
+        self.assertIn("playlist_active_border_color", editor)
+
     def test_runtime_and_manual_service_selection(self):
         runtime = self.client.get("/api/runtime").json()
         self.assertEqual(runtime["service"]["id"], "demo")
@@ -117,6 +133,8 @@ class ApiTests(unittest.TestCase):
         response = self.client.get("/api/runtime?compact=true")
         runtime = response.json()
         self.assertIn("propresenter", runtime)
+        self.assertNotIn("playlist_presentations", runtime["propresenter"])
+        self.assertNotIn("slides", runtime["propresenter"])
         self.assertIn("mics", runtime)
         self.assertIn("timing", runtime)
         self.assertNotIn("service_items", runtime["timing"])
@@ -125,6 +143,16 @@ class ApiTests(unittest.TestCase):
         cached = self.client.get("/api/runtime?compact=true", headers={"If-None-Match": response.headers["etag"]})
         self.assertEqual(cached.status_code, 304)
         self.assertEqual(cached.content, b"")
+
+    def test_propresenter_remote_trigger_requires_explicit_setting(self):
+        response = self.client.post("/api/integrations/propresenter/active-slide", json={"index": 0})
+        self.assertEqual(response.status_code, 403)
+
+    def test_propresenter_playlist_diagnostics_requires_connection(self):
+        response = self.client.get("/api/integrations/propresenter/playlist-diagnostics")
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post("/api/integrations/propresenter/active-playlist-item", json={"index": 0})
+        self.assertEqual(response.status_code, 403)
 
     def test_osm_measurements_are_available_as_service_reports(self):
         accepted = self.client.post("/api/integrations/osm/measurement", json={"laeq": 78.4, "peak": 92.1, "timestamp": "2026-08-05T12:00:00+00:00"})
