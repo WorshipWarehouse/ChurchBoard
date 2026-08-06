@@ -3,6 +3,15 @@ const widgetRenderKeys=new Map();
 const orderScrollPositions=new Map();
 const objectIds=new WeakMap();let nextObjectId=1;
 const slug=decodeURIComponent(location.pathname.split("/").pop());
+let dashboardFitFrame=0;
+function fitDashboardToViewport(){
+  const root=document.querySelector("#dashboard");if(!root)return;
+  root.style.setProperty("--dashboard-scale","1");root.style.setProperty("--dashboard-fit-width","100%");root.style.setProperty("--dashboard-fit-height","100vh");
+  void root.offsetWidth;
+  const width=Math.max(root.scrollWidth,root.clientWidth),height=Math.max(root.scrollHeight,root.clientHeight),scale=Math.min(1,window.innerWidth/width,window.innerHeight/height);
+  root.style.setProperty("--dashboard-scale",String(scale));root.style.setProperty("--dashboard-fit-width",`${100/scale}%`);root.style.setProperty("--dashboard-fit-height",`${100/scale}vh`);
+}
+function queueDashboardFit(){cancelAnimationFrame(dashboardFitFrame);dashboardFitFrame=requestAnimationFrame(fitDashboardToViewport)}
 function updateNativeSpl(){const osm=lastState.osm||{};document.querySelectorAll("[data-spl-meter]").forEach(meter=>{const value=Number(osm[meter.dataset.osmKey||"a_fast"]),green=Number(meter.dataset.green),orange=Number(meter.dataset.orange),reading=meter.querySelector("[data-spl-value]"),status=meter.querySelector("[data-spl-status]");if(!osm.connected||!Number.isFinite(value)){if(reading)reading.textContent="--";if(status)status.textContent="Waiting for Open Sound Meter";meter.classList.remove("spl-green","spl-orange","spl-red");return}if(reading)reading.textContent=value.toFixed(1);meter.classList.toggle("spl-green",value<=green);meter.classList.toggle("spl-orange",value>green&&value<=orange);meter.classList.toggle("spl-red",value>orange);if(status)status.textContent=`${osm.source_name||"OSM source"} · ${meter.dataset.osmLabel||"level"}`})}
 async function loadBoard(){
   dashboard=await api(`/api/dashboards/${encodeURIComponent(slug)}`);
@@ -64,6 +73,7 @@ function render(){
   if(!widgets.length&&root.innerHTML!==`<div class="empty">This dashboard has no widgets.</div>`){root.innerHTML=`<div class="empty">This dashboard has no widgets.</div>`;changed=true}
   updateTimingWidgets();updateOrderTimingWidgets();
   if(changed){tickClocks();enhanceDynamicContent(root)}
+  queueDashboardFit();
   updateNativeSpl();
 }
 function objectId(value){if(!value||typeof value!=="object")return String(value);if(!objectIds.has(value))objectIds.set(value,nextObjectId++);return objectIds.get(value)}
@@ -125,7 +135,7 @@ const fullscreenButton=document.querySelector(".fullscreen-toggle");
 const fullscreenElement=()=>document.fullscreenElement||document.webkitFullscreenElement;
 function updateFullscreenButton(){const active=!!fullscreenElement();fullscreenButton.classList.toggle("is-fullscreen",active);fullscreenButton.textContent=active?"↙":"⛶";fullscreenButton.setAttribute("aria-label",active?"Exit fullscreen":"Enter fullscreen");fullscreenButton.title=active?"Exit fullscreen":"Enter fullscreen"}
 fullscreenButton.addEventListener("click",async()=>{try{if(fullscreenElement()){const exit=document.exitFullscreen||document.webkitExitFullscreen;if(exit)await exit.call(document)}else{const enter=document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen;if(enter)await enter.call(document.documentElement)}}catch(error){console.error(error)}updateFullscreenButton()});
-document.addEventListener("fullscreenchange",updateFullscreenButton);document.addEventListener("webkitfullscreenchange",updateFullscreenButton);updateFullscreenButton();
+document.addEventListener("fullscreenchange",()=>{updateFullscreenButton();queueDashboardFit()});document.addEventListener("webkitfullscreenchange",()=>{updateFullscreenButton();queueDashboardFit()});window.addEventListener("resize",queueDashboardFit,{passive:true});updateFullscreenButton();
 function updatePlans(){
   const select=document.querySelector("#active-plan"),plans=lastState.plans||[],optionsKey=JSON.stringify(plans.map(plan=>[plan.service_type_id,plan.id,plan.title||plan.service_type_name,plan.dates||""]));
   if(optionsKey!==planOptionsKey){select.innerHTML='<option value="">Automatic</option>'+plans.map(plan=>`<option value="${escapeHtml(plan.service_type_id)}:${escapeHtml(plan.id)}">${escapeHtml(plan.title||plan.service_type_name)} · ${escapeHtml(plan.dates||"")}</option>`).join("");planOptionsKey=optionsKey}
