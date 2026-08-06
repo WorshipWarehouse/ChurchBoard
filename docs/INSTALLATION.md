@@ -142,7 +142,7 @@ If the source copy is no longer present, download `installers/raspberry-pi/unins
 ## Network checklist
 
 - Give the ChurchBoard computer a DHCP reservation or static address.
-- Keep ChurchBoard, Planning Center access, ProPresenter, and Shure receivers on a trusted production network.
+- Keep ChurchBoard, Planning Center access, ProPresenter, and Shure receivers on a trusted production network. Enable **Controller Access** in the Advanced Settings of each SLX-D receiver.
 - Permit inbound TCP port `8040` only from devices that need the dashboard.
 - ChurchBoard connects to ProPresenter's configured API port and Shure receivers on TCP port `2202`.
 - Do not forward port `8040` directly from the internet.

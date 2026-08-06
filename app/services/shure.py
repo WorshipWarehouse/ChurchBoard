@@ -54,6 +54,7 @@ class ShureClient:
         for mic in configured_mics:
             host = str(mic.get("host") or "").strip()
             port = int(mic.get("port") or 2202)
+            model = str(mic.get("model") or "qlx-ulx").strip().lower()
             if not host:
                 continue
             receiver = grouped.setdefault((host, port), {
@@ -61,6 +62,7 @@ class ShureClient:
                 "name": mic.get("receiver_name") or host,
                 "host": host,
                 "port": port,
+                "model": model,
                 "channel_configs": [],
             })
             receiver["channel_configs"].append(mic)
@@ -118,6 +120,7 @@ class ShureClient:
                 state["errors"] = [str(exc) or "Receiver unavailable"]
         output = []
         receiver_id = str(receiver.get("id") or receiver.get("host") or "receiver")
+        receiver_model = str(receiver.get("model") or "qlx-ulx").strip().lower()
         for channel, state in states.items():
             state["online"] = transmitter_active(state)
             state.pop("_battery_valid", None)
@@ -131,6 +134,7 @@ class ShureClient:
                 "id": str(config.get("id") or f"{receiver_id}-{channel}"),
                 "receiver": config.get("receiver_name") or receiver.get("name") or receiver_id,
                 "channel": channel,
+                "model": str(config.get("model") or receiver_model),
                 **state,
                 "name": configured_name or state["name"],
             })
