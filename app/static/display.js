@@ -1,9 +1,12 @@
 let dashboard,lastState={},serverInstance="",refreshInFlight=false,planOptionsKey="",planSelectionInFlight=false,lastFullRefresh=0,compactEtag="";
 const widgetRenderKeys=new Map();
 const orderScrollPositions=new Map();
+const playlistScrollPositions=new Map();
 const objectIds=new WeakMap();let nextObjectId=1;
 const slug=decodeURIComponent(location.pathname.split("/").pop());
 function updateNativeSpl(){const osm=lastState.osm||{};document.querySelectorAll("[data-spl-meter]").forEach(meter=>{const value=Number(osm[meter.dataset.osmKey||"a_fast"]),green=Number(meter.dataset.green),orange=Number(meter.dataset.orange),reading=meter.querySelector("[data-spl-value]"),status=meter.querySelector("[data-spl-status]");if(!osm.connected||!Number.isFinite(value)){if(reading)reading.textContent="--";if(status)status.textContent="Waiting for Open Sound Meter";meter.classList.remove("spl-green","spl-orange","spl-red");return}if(reading)reading.textContent=value.toFixed(1);meter.classList.toggle("spl-green",value<=green);meter.classList.toggle("spl-orange",value>green&&value<=orange);meter.classList.toggle("spl-red",value>orange);if(status)status.textContent=`${osm.source_name||"OSM source"} · ${meter.dataset.osmLabel||"level"}`})}
+document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppTrigger),playlistIndex=Number(button.dataset.ppPlaylistIndex);if(!Number.isInteger(index)||index<0||!Number.isInteger(playlistIndex)||playlistIndex<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-slide",{method:"POST",body:JSON.stringify({index,playlist_index:playlistIndex,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true"})});await refresh(true)}catch(error){alert(error.message)}finally{button.disabled=false}});
+document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-playlist-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppPlaylistTrigger);if(!Number.isInteger(index)||index<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-playlist-item",{method:"POST",body:JSON.stringify({index,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true"})})}catch(error){alert(error.message)}finally{button.disabled=false}});
 async function loadBoard(){
   dashboard=await api(`/api/dashboards/${encodeURIComponent(slug)}`);
   document.title=`${dashboard.name} · ChurchBoard`;
@@ -27,7 +30,9 @@ function mergeFullState(fresh){
 }
 function mergeCompactState(fresh){
   const previousTiming=lastState.timing||{},incomingTiming=fresh.timing||{};
-  return {...lastState,...fresh,timing:{...previousTiming,...incomingTiming,service_items:previousTiming.service_items}};
+  const previousProPresenter=lastState.propresenter||{},incomingProPresenter=fresh.propresenter||{};
+  const activeUuid=String(incomingProPresenter.presentation_uuid||previousProPresenter.presentation_uuid||""),playlistPresentations=(previousProPresenter.playlist_presentations||[]).map(item=>({...item,active:!!activeUuid&&String(item.presentation_uuid||"")===activeUuid}));
+  return {...lastState,...fresh,timing:{...previousTiming,...incomingTiming,service_items:previousTiming.service_items},propresenter:{...previousProPresenter,...incomingProPresenter,playlist_presentations:playlistPresentations,slides:previousProPresenter.slides}};
 }
 async function compactRuntime(){
   const response=await fetch("/api/runtime?compact=true",{headers:compactEtag?{"If-None-Match":compactEtag}:{}});
@@ -53,14 +58,15 @@ function render(){
     const id=String(widget.id),renderKey=widgetStateKey(widget,lastState);
     activeIds.add(id);
     if(widgetRenderKeys.get(id)===renderKey&&existing.has(id))continue;
-    const current=existing.get(id),previousList=current?.querySelector(".full-service-order-list");if(previousList)orderScrollPositions.set(id,previousList.scrollTop);
+    const current=existing.get(id),previousList=current?.querySelector(".full-service-order-list"),previousPlaylist=current?.querySelector(".pp-browser-scroll");if(previousList)orderScrollPositions.set(id,previousList.scrollTop);if(previousPlaylist)playlistScrollPositions.set(id,previousPlaylist.scrollTop);
     const markup=widgetMarkup(widget,lastState);
     const template=document.createElement("template");template.innerHTML=markup.trim();const replacement=template.content.firstElementChild;
     if(current)current.replaceWith(replacement);else root.append(replacement);
     const replacementList=replacement.querySelector(".full-service-order-list"),savedScroll=orderScrollPositions.get(id);if(replacementList){if(savedScroll!==undefined)replacementList.scrollTop=savedScroll;replacementList.addEventListener("scroll",()=>orderScrollPositions.set(id,replacementList.scrollTop),{passive:true})}
+    const replacementPlaylist=replacement.querySelector(".pp-browser-scroll"),savedPlaylistScroll=playlistScrollPositions.get(id);if(replacementPlaylist){if(savedPlaylistScroll!==undefined)replacementPlaylist.scrollTop=savedPlaylistScroll;replacementPlaylist.addEventListener("scroll",()=>playlistScrollPositions.set(id,replacementPlaylist.scrollTop),{passive:true})}
     widgetRenderKeys.set(id,renderKey);changed=true;
   }
-  for(const [id,element] of existing){if(!activeIds.has(id)){element.remove();widgetRenderKeys.delete(id);changed=true}}
+  for(const [id,element] of existing){if(!activeIds.has(id)){element.remove();widgetRenderKeys.delete(id);orderScrollPositions.delete(id);playlistScrollPositions.delete(id);changed=true}}
   if(!widgets.length&&root.innerHTML!==`<div class="empty">This dashboard has no widgets.</div>`){root.innerHTML=`<div class="empty">This dashboard has no widgets.</div>`;changed=true}
   updateTimingWidgets();updateOrderTimingWidgets();
   if(changed){tickClocks();enhanceDynamicContent(root)}
@@ -74,7 +80,7 @@ function widgetStateKey(widget,state){
   if(widget.type==="service")return`service:${objectId(service)}:${timing.source||""}:${timing.state||""}`;
   if(widget.type==="timing")return`timing:${String(timing.current_item?.id||"")}:${timing.rehearsal===true}`;
   if(["assignments","mics"].includes(widget.type))return`${widget.type}:${JSON.stringify([state.people||[],state.mics||[],state.planning_center_media||{}])}`;
-  if(widget.type==="slides")return`slides:${JSON.stringify(pp)}`;
+  if(widget.type==="slides"||widget.type==="playlist"||widget.type==="producer")return`${widget.type}:${JSON.stringify([pp,service,timing])}`;
   if(widget.type==="notes")return`notes:${String(pp.current?.notes||"")}`;
   if(widget.type==="order")return`order:${objectId(timing.service_items||service.items)}:${objectId(state.people)}:${JSON.stringify(leaderMicKey(state.mics))}:${String(timing.current_item?.id||"")}:${timing.service_time_id||""}:${settings.show_leader!==false}:${settings.show_mic!==false}`;
   if(widget.type==="people"||widget.type==="person")return`${widget.type}:${objectId(state.people)}`;
