@@ -38,7 +38,12 @@ class OBSClient:
             self.ws = None
 
     async def _connect(self) -> None:
-        if self.ws and not self.ws.closed:
+        # websockets 14+ uses ``ClientConnection.state`` instead of the old
+        # ``.closed`` attribute. Runtime clears this reference whenever a
+        # request fails, so a retained socket is the active monitor session.
+        # Checking the removed attribute here made OBS connect successfully,
+        # then disconnect on ChurchBoard's next telemetry refresh.
+        if self.ws is not None:
             return
         host, port = str(self.settings.get("host") or "").strip(), int(self.settings.get("port") or 4455)
         self.ws = await websockets.connect(f"ws://{host}:{port}", open_timeout=3, close_timeout=1, subprotocols=["obswebsocket.json"])
