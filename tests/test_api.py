@@ -42,6 +42,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(editor.status_code, 200)
         self.assertIn("churchboard-icon.png", editor.text)
         self.assertIn('id="dashboard-background-color" type="color"', editor.text)
+        self.assertIn('id="delete-dashboard"', editor.text)
         self.assertIn('input name="show_title" type="checkbox"', editor.text)
         self.assertIn('select name="slide_layout"', editor.text)
         self.assertIn('input name="show_parts" type="checkbox"', editor.text)
@@ -58,6 +59,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn('settings.show_title===false', common_script)
         self.assertIn('full-service-order-list', common_script)
         self.assertIn('order_display_mode', self.client.get("/static/editor.js").text)
+        self.assertIn('method:"DELETE"', self.client.get("/static/editor.js").text)
         stylesheet = self.client.get("/static/style.css").text
         self.assertIn('mask:url("/static/churchboard-mark.svg")', stylesheet)
         mark = self.client.get("/static/churchboard-mark.svg")
