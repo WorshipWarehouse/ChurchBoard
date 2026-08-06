@@ -32,6 +32,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("churchboard-icon.png", admin.text)
         self.assertIn('select name="timezone"', admin.text)
         self.assertNotIn('input name="timezone"', admin.text)
+        self.assertIn('id="cancel-dashboard" type="button"', admin.text)
+        self.assertIn('dialog.close("cancel")', self.client.get("/static/admin.js").text)
         display = self.client.get("/display/main")
         self.assertEqual(display.status_code, 200)
         self.assertIn('class="menu-brand"', display.text)
