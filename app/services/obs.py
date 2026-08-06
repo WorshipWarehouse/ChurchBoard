@@ -85,6 +85,17 @@ class OBSClient:
                     raise RuntimeError(data.get("requestStatus", {}).get("comment") or f"OBS rejected {request_type}")
                 return data.get("responseData") or {}
 
+    async def _optional_request(self, request_type: str, request_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Return an empty value for OBS features that are legitimately off.
+
+        Preview-scene status is only available with Studio Mode. It must never
+        turn a read-only health monitor into a failed connection.
+        """
+        try:
+            return await self._request(request_type, request_data)
+        except RuntimeError:
+            return {}
+
     async def status(self) -> dict[str, Any]:
         await self._connect()
         # Requests are intentionally sequential: obs-websocket can emit events
@@ -93,8 +104,8 @@ class OBSClient:
         record = await self._request("GetRecordStatus")
         stats = await self._request("GetStats")
         program = await self._request("GetCurrentProgramScene")
-        preview = await self._request("GetCurrentPreviewScene")
-        scenes = await self._request("GetSceneItemList", {"sceneName": program.get("currentProgramSceneName", "")}) if program.get("currentProgramSceneName") else {}
+        preview = await self._optional_request("GetCurrentPreviewScene")
+        scenes = await self._optional_request("GetSceneItemList", {"sceneName": program.get("currentProgramSceneName", "")}) if program.get("currentProgramSceneName") else {}
         for _ in range(3):
             try:
                 packet = json.loads(await asyncio.wait_for(self.ws.recv(), .03))
