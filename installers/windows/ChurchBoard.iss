@@ -1,6 +1,6 @@
 #define AppName "ChurchBoard"
 #define AppPublisher "ChurchBoard"
-#define AppURL "https://github.com/wtapper89/ChurchBoard"
+#define AppURL "https://github.com/WorshipWarehouse/ChurchBoard"
 #define AppExeName "ChurchBoard.exe"
 #define AppVersion GetEnv("CHURCHBOARD_VERSION")
 
