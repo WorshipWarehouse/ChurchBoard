@@ -112,9 +112,10 @@ function fitOrderService(root=document){
   });
 }
 function updateTimingWidgets(){
-  const timing=lastState.timing||{},item=timing.current_item,cells=document.querySelectorAll('[data-widget-type="timing"] .timing-cell');
-  if(cells[0]){const label=cells[0].querySelector(".timing-label"),value=cells[0].querySelector(".timing-value"),labelText=item?.title||"Current item",valueText=formatDuration(timing.item_delta||0);if(label&&label.textContent!==labelText)label.textContent=labelText;if(value){if(value.textContent!==valueText)value.textContent=valueText;value.classList.toggle("over",(timing.item_delta||0)>0);value.classList.toggle("ahead",(timing.item_delta||0)<=0)}}
-  if(cells[1]){const value=cells[1].querySelector(".timing-value"),valueText=formatDuration(timing.overall_delta||0);if(value){if(value.textContent!==valueText)value.textContent=valueText;value.classList.toggle("over",(timing.overall_delta||0)>0);value.classList.toggle("ahead",(timing.overall_delta||0)<=0)}}
+  const timing=lastState.timing||{},item=timing.current_item,cells=document.querySelectorAll('[data-widget-type="timing"] .timing-cell');let changed=false;
+  if(cells[0]){const label=cells[0].querySelector(".timing-label"),value=cells[0].querySelector(".timing-value"),labelText=item?.title||"Current item",valueText=formatDuration(timing.item_delta||0);if(label&&label.textContent!==labelText){label.textContent=labelText;changed=true}if(value){if(value.textContent!==valueText){value.textContent=valueText;changed=true}value.classList.toggle("over",(timing.item_delta||0)>0);value.classList.toggle("ahead",(timing.item_delta||0)<=0)}}
+  if(cells[1]){const value=cells[1].querySelector(".timing-value"),valueText=formatDuration(timing.overall_delta||0);if(value){if(value.textContent!==valueText){value.textContent=valueText;changed=true}value.classList.toggle("over",(timing.overall_delta||0)>0);value.classList.toggle("ahead",(timing.overall_delta||0)<=0)}}
+  if(changed)requestAnimationFrame(()=>resizeDashboardContent(document.querySelector("#dashboard")));
 }
 function updateOrderTimingWidgets(){
   const timing=lastState.timing||{},service=lastState.service||{},adjusting=["running","live","controlled"].includes(timing.state),drift=Number(timing.overall_delta||0),driftLabel=adjusting&&Math.abs(drift)>=30?`${formatDuration(drift)} ${drift>0?"late":"early"}`:"On time",start=Date.parse(timing.service_start_at||service.starts_at||"");
