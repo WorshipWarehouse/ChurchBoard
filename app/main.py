@@ -189,6 +189,8 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     for secret_name in ("client_secret", "access_token", "refresh_token"):
         if not settings.get("restream", {}).get(secret_name):
             settings.setdefault("restream", {})[secret_name] = existing_restream.get(secret_name, "")
+    if not settings.get("obs", {}).get("password"):
+        settings.setdefault("obs", {})["password"] = data["settings"].get("obs", {}).get("password", "")
     data["settings"] = settings
     store.save(data)
     await request.app.state.runtime.refresh(force=True)
@@ -219,6 +221,7 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
             "service_control",
             "osm",
             "restream",
+            "obs",
         )
     }
     payload["propresenter"] = propresenter

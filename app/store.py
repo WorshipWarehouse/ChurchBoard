@@ -64,6 +64,7 @@ def default_data() -> dict[str, Any]:
                 "source_id": "",
             },
             "restream": {"enabled": False, "client_id": "", "client_secret": "", "access_token": "", "refresh_token": "", "access_token_expires_at": 0, "refresh_seconds": 5},
+            "obs": {"enabled": False, "host": "127.0.0.1", "port": 4455, "password": "", "refresh_seconds": 0.5, "dropped_frames_threshold": 2, "preview_url": ""},
             "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
             "manual_plan": None,
         },
@@ -92,7 +93,7 @@ class ConfigStore:
             baseline = default_data()
             baseline.update(raw)
             baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
-            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream"):
+            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream", "obs"):
                 baseline["settings"][section] = {
                     **default_data()["settings"][section],
                     **raw.get("settings", {}).get(section, {}),
@@ -157,4 +158,7 @@ class ConfigStore:
         restream["access_token"] = ""
         restream["client_secret"] = ""
         restream["refresh_token"] = ""
+        obs = settings.get("obs", {})
+        obs["password_configured"] = bool(obs.get("password"))
+        obs["password"] = ""
         return settings
