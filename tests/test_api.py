@@ -57,6 +57,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn('/editor/${encodeURIComponent(item.slug)}', display_script)
         self.assertIn('planSelectionInFlight', display_script)
         self.assertIn('event.key==="Escape"', display_script)
+        self.assertIn("fitDashboardToViewport", display_script)
+        self.assertIn("--dashboard-scale", display_script)
+        self.assertIn("resizeDashboardContent(document.querySelector(\"#dashboard\"))", display_script)
         common_script = self.client.get("/static/common.js").text
         self.assertIn('class="unassigned-board-icon"', common_script)
         self.assertIn('settings.slide_layout==="previews_only"', common_script)

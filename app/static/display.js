@@ -4,6 +4,15 @@ const orderScrollPositions=new Map();
 const playlistScrollPositions=new Map();
 const objectIds=new WeakMap();let nextObjectId=1;
 const slug=decodeURIComponent(location.pathname.split("/").pop());
+let dashboardFitFrame=0;
+function fitDashboardToViewport(){
+  const root=document.querySelector("#dashboard");if(!root)return;
+  root.style.setProperty("--dashboard-scale","1");root.style.setProperty("--dashboard-fit-width","100%");root.style.setProperty("--dashboard-fit-height","100vh");
+  void root.offsetWidth;
+  const width=Math.max(root.scrollWidth,root.clientWidth),height=Math.max(root.scrollHeight,root.clientHeight),scale=Math.min(1,window.innerWidth/width,window.innerHeight/height);
+  root.style.setProperty("--dashboard-scale",String(scale));root.style.setProperty("--dashboard-fit-width",`${100/scale}%`);root.style.setProperty("--dashboard-fit-height",`${100/scale}vh`);
+}
+function queueDashboardFit(){cancelAnimationFrame(dashboardFitFrame);dashboardFitFrame=requestAnimationFrame(fitDashboardToViewport)}
 function updateNativeSpl(){const osm=lastState.osm||{};document.querySelectorAll("[data-spl-meter]").forEach(meter=>{const value=Number(osm[meter.dataset.osmKey||"a_fast"]),green=Number(meter.dataset.green),orange=Number(meter.dataset.orange),reading=meter.querySelector("[data-spl-value]"),status=meter.querySelector("[data-spl-status]");if(!osm.connected||!Number.isFinite(value)){if(reading)reading.textContent="--";if(status)status.textContent="Waiting for Open Sound Meter";meter.classList.remove("spl-green","spl-orange","spl-red");return}if(reading)reading.textContent=value.toFixed(1);meter.classList.toggle("spl-green",value<=green);meter.classList.toggle("spl-orange",value>green&&value<=orange);meter.classList.toggle("spl-red",value>orange);if(status)status.textContent=`${osm.source_name||"OSM source"} · ${meter.dataset.osmLabel||"level"}`})}
 document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppTrigger),playlistIndex=Number(button.dataset.ppPlaylistIndex);if(!Number.isInteger(index)||index<0||!Number.isInteger(playlistIndex)||playlistIndex<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-slide",{method:"POST",body:JSON.stringify({index,playlist_index:playlistIndex,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true"})});await refresh(true)}catch(error){alert(error.message)}finally{button.disabled=false}});
 document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-playlist-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppPlaylistTrigger);if(!Number.isInteger(index)||index<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-playlist-item",{method:"POST",body:JSON.stringify({index,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true"})})}catch(error){alert(error.message)}finally{button.disabled=false}});
@@ -70,6 +79,7 @@ function render(){
   if(!widgets.length&&root.innerHTML!==`<div class="empty">This dashboard has no widgets.</div>`){root.innerHTML=`<div class="empty">This dashboard has no widgets.</div>`;changed=true}
   updateTimingWidgets();updateOrderTimingWidgets();
   if(changed){tickClocks();enhanceDynamicContent(root)}
+  queueDashboardFit();
   updateNativeSpl();
 }
 function objectId(value){if(!value||typeof value!=="object")return String(value);if(!objectIds.has(value))objectIds.set(value,nextObjectId++);return objectIds.get(value)}
@@ -108,9 +118,10 @@ function fitOrderService(root=document){
   });
 }
 function updateTimingWidgets(){
-  const timing=lastState.timing||{},item=timing.current_item,cells=document.querySelectorAll('[data-widget-type="timing"] .timing-cell');
-  if(cells[0]){const label=cells[0].querySelector(".timing-label"),value=cells[0].querySelector(".timing-value"),labelText=item?.title||"Current item",valueText=formatDuration(timing.item_delta||0);if(label&&label.textContent!==labelText)label.textContent=labelText;if(value){if(value.textContent!==valueText)value.textContent=valueText;value.classList.toggle("over",(timing.item_delta||0)>0);value.classList.toggle("ahead",(timing.item_delta||0)<=0)}}
-  if(cells[1]){const value=cells[1].querySelector(".timing-value"),valueText=formatDuration(timing.overall_delta||0);if(value){if(value.textContent!==valueText)value.textContent=valueText;value.classList.toggle("over",(timing.overall_delta||0)>0);value.classList.toggle("ahead",(timing.overall_delta||0)<=0)}}
+  const timing=lastState.timing||{},item=timing.current_item,cells=document.querySelectorAll('[data-widget-type="timing"] .timing-cell');let changed=false;
+  if(cells[0]){const label=cells[0].querySelector(".timing-label"),value=cells[0].querySelector(".timing-value"),labelText=item?.title||"Current item",valueText=formatDuration(timing.item_delta||0);if(label&&label.textContent!==labelText){label.textContent=labelText;changed=true}if(value){if(value.textContent!==valueText){value.textContent=valueText;changed=true}value.classList.toggle("over",(timing.item_delta||0)>0);value.classList.toggle("ahead",(timing.item_delta||0)<=0)}}
+  if(cells[1]){const value=cells[1].querySelector(".timing-value"),valueText=formatDuration(timing.overall_delta||0);if(value){if(value.textContent!==valueText){value.textContent=valueText;changed=true}value.classList.toggle("over",(timing.overall_delta||0)>0);value.classList.toggle("ahead",(timing.overall_delta||0)<=0)}}
+  if(changed)requestAnimationFrame(()=>resizeDashboardContent(document.querySelector("#dashboard")));
 }
 function updateOrderTimingWidgets(){
   const timing=lastState.timing||{},service=lastState.service||{},adjusting=["running","live","controlled"].includes(timing.state),drift=Number(timing.overall_delta||0),driftLabel=adjusting&&Math.abs(drift)>=30?`${formatDuration(drift)} ${drift>0?"late":"early"}`:"On time",start=Date.parse(timing.service_start_at||service.starts_at||"");
@@ -131,7 +142,7 @@ const fullscreenButton=document.querySelector(".fullscreen-toggle");
 const fullscreenElement=()=>document.fullscreenElement||document.webkitFullscreenElement;
 function updateFullscreenButton(){const active=!!fullscreenElement();fullscreenButton.classList.toggle("is-fullscreen",active);fullscreenButton.textContent=active?"↙":"⛶";fullscreenButton.setAttribute("aria-label",active?"Exit fullscreen":"Enter fullscreen");fullscreenButton.title=active?"Exit fullscreen":"Enter fullscreen"}
 fullscreenButton.addEventListener("click",async()=>{try{if(fullscreenElement()){const exit=document.exitFullscreen||document.webkitExitFullscreen;if(exit)await exit.call(document)}else{const enter=document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen;if(enter)await enter.call(document.documentElement)}}catch(error){console.error(error)}updateFullscreenButton()});
-document.addEventListener("fullscreenchange",updateFullscreenButton);document.addEventListener("webkitfullscreenchange",updateFullscreenButton);updateFullscreenButton();
+document.addEventListener("fullscreenchange",()=>{updateFullscreenButton();queueDashboardFit()});document.addEventListener("webkitfullscreenchange",()=>{updateFullscreenButton();queueDashboardFit()});window.addEventListener("resize",queueDashboardFit,{passive:true});updateFullscreenButton();
 function updatePlans(){
   const select=document.querySelector("#active-plan"),plans=lastState.plans||[],optionsKey=JSON.stringify(plans.map(plan=>[plan.service_type_id,plan.id,plan.title||plan.service_type_name,plan.dates||""]));
   if(optionsKey!==planOptionsKey){select.innerHTML='<option value="">Automatic</option>'+plans.map(plan=>`<option value="${escapeHtml(plan.service_type_id)}:${escapeHtml(plan.id)}">${escapeHtml(plan.title||plan.service_type_name)} · ${escapeHtml(plan.dates||"")}</option>`).join("");planOptionsKey=optionsKey}
