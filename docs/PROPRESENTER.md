@@ -95,6 +95,8 @@ enables control merely because a dashboard is being viewed.
 
 When the active slide contains a ProPresenter timer element, ChurchBoard replaces its design-time placeholder with the currently running ProPresenter timer and composites that changing value over the otherwise static slide thumbnail. Video remaining time is kept separate and is never shown as a slide timer. For foreground video cues, ChurchBoard displays playing state, elapsed time, duration, and progress; looping motion backgrounds behind lyrics do not receive that overlay. ProPresenter's HTTP API exposes static cue/media thumbnails and transport information, but not live rendered audience-screen frames, so moving video cannot be reproduced from that API alone. A true moving preview would require a separate browser-compatible output stream from ProPresenter or a capture application such as OBS.
 
+Add a **ProPresenter timers** widget from the dashboard editor to show every configured ProPresenter timer that the Network API returns. Each card shows its timer name, current value, and state; the widget is read-only and updates from ProPresenter without controlling timer playback.
+
 ## 5. Let ProPresenter drive Planning Center Services LIVE
 
 ProPresenter's built-in Planning Center LIVE panel and its slide playback are separate controls; advancing a slide does not itself advance LIVE. Renewed Vision explains that behavior in [Planning Center Live and Stage Timers](https://support.renewedvision.com/hc/en-us/articles/1500006143281-Planning-Center-Live-and-Planning-Center-Live-Stage-Timers). ChurchBoard's optional LIVE automation provides the linkage.
