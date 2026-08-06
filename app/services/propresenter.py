@@ -231,6 +231,7 @@ class ProPresenterClient:
             **playlist_context,
             "current": current_result,
             "next": next_result,
+            "timers": self._transport_payload.get("timers") or [],
             "slides": [
                 {"index": position + 1, "text": self._slide(entry.get("cue")).get("text", ""), "notes": self._notes(entry.get("cue")), "part": entry.get("part", ""), "color": entry.get("color", ""), "image_url": self._thumbnail_url(presentation_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")), "active": position == current_position}
                 for position, entry in enumerate(cue_entries)
