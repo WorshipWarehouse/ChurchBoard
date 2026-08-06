@@ -32,10 +32,11 @@ The service-type name and ID are saved together. If Planning Center temporarily 
 2. Select a **Scheduled Positions & Mics** widget.
 3. In the inspector, check the teams/categories to include, such as Band or Production.
 4. Check the individual Planning Center positions to display.
-5. Drag positions into the desired display order.
-6. Save the dashboard.
+5. Under **Cards represent**, choose **One card per person** or **One card per position**.
+6. Drag positions into the desired display order.
+7. Save the dashboard.
 
-Every selected position appears even when no person or microphone is assigned. When one person holds multiple selected positions, ChurchBoard shows one entry with those positions together and lists every mapped microphone/equipment channel under that person. An open Planning Center position displays **Unassigned**.
+Every selected position appears even when no person or microphone is assigned. **One card per person** consolidates a person who holds several selected roles—such as vocals and guitar—into one card and lists all of that person's mapped microphone/equipment channels. **One card per position** keeps every selected role in its own card, so the same person can appear more than once. This choice is saved independently for each dashboard widget, allowing the green room and audio booth to use different views. An open Planning Center position displays **Unassigned**.
 
 ## 3. Add Shure microphones
 
@@ -62,7 +63,7 @@ ChurchBoard also monitors Sennheiser EW-DX receivers through the legacy Sennheis
 
 Enable **3rd Party Access → Legacy** on the receiver before connecting it. Current support polls EW-DX SSCv1 telemetry: battery percentage and runtime, transmitter mute, RF quality/RSSI, AF level, carrier frequency, device model, firmware, and device warnings. EW-DX firmware 4.0 and later can use Sennheiser’s secured SSCv2 REST API, which is not yet supported by ChurchBoard; select Legacy mode for this integration.
 
-## 4. Connect ProPresenter
+## 5. Connect ProPresenter
 
 For the complete linked-playlist workflow, recommended Planning Center integration settings, Network API setup, production checklist, and troubleshooting, see **[ProPresenter setup](PROPRESENTER.md)**.
 
@@ -80,7 +81,7 @@ In a ProPresenter widget, choose:
 
 Part labels use their ProPresenter colors. Slide notes appear when enabled, and widget typography scales to keep long content visible.
 
-## 5. Let ProPresenter drive Services LIVE
+## 6. Let ProPresenter drive Services LIVE
 
 When ProPresenter is synced from a Planning Center plan, ChurchBoard can use the active presentation to control the corresponding Services LIVE item and timing.
 
@@ -92,10 +93,11 @@ When ProPresenter is synced from a Planning Center plan, ChurchBoard can use the
 
 ChurchBoard first uses ProPresenter's Planning Center playlist/item ordering when available. It then uses normalized title matching, including non-song items such as `Message`, even when the presentation itself has a title like a Scripture reference.
 
-## 6. Configure order of service
+## 7. Configure order of service
 
 Select an **Order of service** widget in the editor to enable:
 
+- compact current-item, complete scrollable, or complete fit-to-widget display;
 - scheduled item duration;
 - estimated wall-clock start time;
 - song/item leader;
@@ -103,11 +105,11 @@ Select an **Order of service** widget in the editor to enable:
 
 For multiple service times, ChurchBoard uses the active service instance. Before the day's first service or during an early rehearsal, estimates start from the earliest scheduled service time.
 
-## 7. Configure team members
+## 8. Configure team members
 
 Add a **Team members** widget, select Planning Center teams/categories, then choose the positions to include. Each row can show a circular photo, name, and position. Names and positions scale together so longer entries remain visible.
 
-## 8. Use a custom unassigned icon
+## 9. Use a custom unassigned icon
 
 A Scheduled Positions & Mics widget uses a one-color ChurchBoard mark for an unassigned position by default. It can replace that mark with media stored in the active Planning Center plan.
 
@@ -119,13 +121,34 @@ A Scheduled Positions & Mics widget uses a one-color ChurchBoard mark for an una
 
 The title is configurable per widget, so different dashboards can use different plan-media icons. ChurchBoard matches the title without regard to capitalization.
 
-## 9. Audio/SPL meter
+## 10. Connect Open Sound Meter
 
-Add an **Audio / SPL meter** widget and set the green, orange, and red thresholds. Choose **Enable microphone** from the display and grant the browser microphone permission. The permission button remains available at the widget's smallest size.
+ChurchBoard can receive calibrated level data directly from [Open Sound Meter](https://opensoundmeter.com/) instead of measuring through the dashboard browser.
 
-Browser microphone readings are useful as a production reference but are not a substitute for a calibrated, standards-compliant SPL meter or noise dosimeter and must not be used for regulatory compliance. Calibration varies by computer, interface, browser, and microphone. See [legal and operational limitations](../LEGAL.md).
+1. In Open Sound Meter, configure the audio interface, measurement microphone, and calibration.
+2. Choose the Wi-Fi icon and enable **Remote API Server**.
+3. Keep the Open Sound Meter and ChurchBoard computers on the same multicast-enabled network segment.
+4. In ChurchBoard Setup, enable **Open Sound Meter monitoring**.
+5. Select the measurement source, report weighting, and Fast or Slow response.
+6. Optionally enable downloadable SPL graphs and Planning Center item averages.
+7. Choose **Test OSM connection**, then add an **Open Sound Meter** widget to the desired board.
 
-## 10. Open displays
+ChurchBoard displays Open Sound Meter's selected level after applying the same SPL reference used by Open Sound Meter. It does not calibrate, smooth, or synthesize the measurement. See the complete [Open Sound Meter setup and data notes](OPEN_SOUND_METER.md) and [legal and operational limitations](../LEGAL.md).
+
+## 11. Connect Restream
+
+Restream monitoring shows whether a broadcast is live or upcoming, its elapsed time and available viewer count, and the state of each configured destination.
+
+1. Create a Restream API application and copy its **Client ID** and **Client Secret**.
+2. Add `http://127.0.0.1:8040/api/integrations/restream/callback` as the application's Redirect URI.
+3. Grant only the read scopes needed for channels, streams/events, and viewer analytics.
+4. In ChurchBoard Setup, enable **Restream monitoring** and enter both credentials.
+5. Choose **Save & connect Restream**, authorize the account, and then test the connection.
+6. Add a **Restream livestream** widget to any dashboard that needs broadcast visibility.
+
+ChurchBoard stores the client secret and OAuth tokens only in its local settings. Encoder bitrate and health are not exposed by the Restream public API, so ChurchBoard labels those values unavailable instead of estimating them. See [Restream setup](RESTREAM.md).
+
+## 12. Open displays
 
 Each dashboard has its own **Background color** picker at the top of the editor. The dashboard background, translucent liquid-glass widget surfaces, reflections, borders, and interface accents follow that color. Operational mic and SPL states remain green, yellow, or red so warnings are still immediately recognizable.
 

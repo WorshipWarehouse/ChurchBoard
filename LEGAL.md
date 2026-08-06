@@ -16,9 +16,9 @@ The initial cross-platform dashboard concept also drew inspiration from [NewsTal
 
 ## Trademarks and third-party services
 
-ChurchBoard is an independent project. It is not affiliated with, authorized by, sponsored by, or endorsed by Planning Center, Shure, Renewed Vision, ProPresenter, Micboard, Apple, Microsoft, or the Raspberry Pi Foundation.
+ChurchBoard is an independent project. It is not affiliated with, authorized by, sponsored by, or endorsed by Planning Center, Shure, Sennheiser, Renewed Vision, ProPresenter, Open Sound Meter, Restream, Micboard, Apple, Microsoft, or the Raspberry Pi Foundation.
 
-Planning Center, Shure, QLX-D, ULX-D, Renewed Vision, ProPresenter, Apple, macOS, Mac, Microsoft, Windows, and Raspberry Pi are trademarks or registered trademarks of their respective owners. Their names are used only to identify compatible products or services.
+Planning Center, Shure, QLX-D, ULX-D, Sennheiser, EW-DX, Renewed Vision, ProPresenter, Open Sound Meter, Restream, Apple, macOS, Mac, Microsoft, Windows, and Raspberry Pi are trademarks or registered trademarks of their respective owners. Their names are used only to identify compatible products or services.
 
 Use of third-party APIs, devices, accounts, media, and services remains subject to the applicable owner's terms, licenses, privacy policies, permissions, and rate limits. Users are responsible for obtaining permission to display Planning Center profile photos or other personal data on ChurchBoard screens.
 
@@ -30,4 +30,4 @@ ChurchBoard processes Planning Center credentials, schedule data, names, and pho
 
 Mic telemetry, service timing, slide matching, and control status are informational. Confirm critical production actions in the manufacturers' or service providers' official interfaces. Do not use ChurchBoard as the sole indication for safety-critical, emergency, hearing-protection, or regulatory decisions.
 
-The browser Audio/SPL widget is an approximate production reference whose response varies by microphone, interface, operating system, browser, placement, and calibration. It is not a certified sound-level meter or noise dosimeter and is not intended for regulatory compliance. Use a properly calibrated, standards-compliant instrument and qualified guidance for occupational or hearing-safety measurements.
+The Open Sound Meter widget displays measurements supplied by a separately configured Open Sound Meter installation. ChurchBoard does not calibrate the microphone or audio interface and does not certify the measurement chain. The displayed level and reports remain a production reference, not a certified sound-level meter or noise dosimeter, and are not intended for regulatory compliance. Use properly calibrated, standards-compliant instruments and qualified guidance for occupational or hearing-safety measurements.

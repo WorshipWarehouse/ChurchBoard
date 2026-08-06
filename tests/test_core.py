@@ -24,6 +24,7 @@ class StoreTests(unittest.TestCase):
             self.assertEqual([item["slug"] for item in store.load()["dashboards"]], ["main", "green-room", "audio"])
             self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["type"], "assignments")
             self.assertEqual(store.load()["dashboards"][2]["widgets"][3]["settings"]["display_mode"], "technical")
+            self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["card_grouping"], "person")
             self.assertFalse(store.load()["dashboards"][0]["widgets"][3]["settings"]["use_planning_center_icon"])
             self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["unassigned_media_title"], "Icon")
             self.assertEqual(store.load()["dashboards"][0]["widgets"][5]["settings"]["display_mode"], "current")
@@ -62,6 +63,14 @@ class StoreTests(unittest.TestCase):
             data["dashboards"][0]["widgets"][5]["settings"].pop("display_mode")
             store.save(data)
             self.assertEqual(store.load()["dashboards"][0]["widgets"][5]["settings"]["display_mode"], "current")
+
+    def test_assignment_widget_migrates_to_person_card_grouping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "state.json")
+            data = store.load()
+            data["dashboards"][0]["widgets"][3]["settings"].pop("card_grouping")
+            store.save(data)
+            self.assertEqual(store.load()["dashboards"][0]["widgets"][3]["settings"]["card_grouping"], "person")
 
     def test_public_settings_never_returns_secret(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -448,6 +457,8 @@ class RuntimeAssignmentTests(unittest.TestCase):
         RuntimeService._apply_assignments(state, {"band::acoustic guitar": "instrument", "band::vocals": "vocal"})
         self.assertEqual(state["mics"][0]["assignment"]["person_id"], "caleb")
         self.assertEqual(state["mics"][1]["assignment"]["person_id"], "caleb")
+        self.assertEqual(state["mics"][0]["assignment"]["position_key"], "band::acoustic guitar")
+        self.assertEqual(state["mics"][1]["assignment"]["position_key"], "band::vocals")
 
     def test_unfilled_mapped_position_keeps_its_filter_key(self):
         state = {"people": [], "mics": [{"id": "blue", "name": "Blue"}]}
