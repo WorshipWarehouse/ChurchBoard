@@ -24,4 +24,4 @@ Core runtime components include:
 
 Build and packaging tools include PyInstaller (GPL-2.0-or-later with its exception for distributing bundled applications), dmgbuild (MIT), and Inno Setup under its own license. These tools do not change ChurchBoard's MIT license. Exact notices collected from the Python build environment are placed in `legal/third-party` inside packaged builds; Windows and Linux installers also install them as readable files beside the application or under the platform documentation directory.
 
-Micboard and NewsTalentMonitorPlus are credited inspirations, not bundled dependencies. See [ChurchBoard legal information](LEGAL.md).
+Micboard and NewsTalentMonitorPlus are credited inspirations, not bundled dependencies. Open Sound Meter and Restream are separately installed or hosted services accessed through their documented network interfaces; their software is not bundled with ChurchBoard. See [ChurchBoard legal information](LEGAL.md).
