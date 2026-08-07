@@ -1020,9 +1020,9 @@ class ProPresenterTests(unittest.TestCase):
             "arrangements": [{"id": {"uuid": "arrangement", "index": 0}, "groups": ["verse", "chorus", "bridge"], "total_cues": 4}],
         }
         entries = ProPresenterClient._presentation_cue_entries(presentation)
-        self.assertEqual([entry["part"] for entry in entries], ["Blank", "Verse 2", "Verse 2", "Chorus 1", "Bridge"])
+        self.assertEqual([entry["part"] for entry in entries], ["Verse 2", "Verse 2", "Chorus 1", "Bridge"])
         current, next_position = ProPresenterClient._cue_positions(entries, {"text": "Verse last"}, {"text": "Chorus line"}, 1)
-        self.assertEqual((current, next_position), (2, 3))
+        self.assertEqual((current, next_position), (1, 2))
         self.assertEqual(ProPresenterClient._cue_total({"presentation_index": {"total_cues": 4}}, len(entries)), 4)
 
     def test_nested_live_presentation_index_is_read(self):
@@ -1090,6 +1090,36 @@ class ProPresenterTests(unittest.TestCase):
 
 
 class ProPresenterPollingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_thumbnail_route_converts_zero_based_cue_to_one_based_number(self):
+        class FakeResponse:
+            content = b"jpeg"
+            headers = {"content-type": "image/jpeg"}
+
+            def raise_for_status(self):
+                return None
+
+        class FakeHttp:
+            def __init__(self):
+                self.url = ""
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def get(self, url, **_kwargs):
+                self.url = url
+                return FakeResponse()
+
+        fake = FakeHttp()
+        client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 50001})
+        with patch("app.services.propresenter.httpx.AsyncClient", return_value=fake):
+            content, media_type = await client.thumbnail("ABC-123", 3)
+        self.assertEqual(content, b"jpeg")
+        self.assertEqual(media_type, "image/jpeg")
+        self.assertTrue(fake.url.endswith("/v1/presentation/ABC-123/thumbnail/4"))
+
     async def test_active_playlist_context_drives_live_match_when_focus_is_elsewhere(self):
         class FakeResponse:
             def __init__(self, payload):

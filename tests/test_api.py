@@ -123,9 +123,13 @@ class ApiTests(unittest.TestCase):
         self.assertIn("playlist_item_size", editor)
         self.assertIn("playlist_marker_size", editor)
         self.assertIn("playlist_active_border_color", editor)
-        self.assertIn("playlist_keyboard_control", editor)
-        self.assertIn("playlist_allow_remote_trigger", editor)
-        self.assertIn("/api/integrations/propresenter/navigate/", self.client.get("/static/display.js").text)
+        self.assertNotIn("playlist_keyboard_control", editor)
+        self.assertNotIn("playlist_allow_remote_trigger", editor)
+        display_script = self.client.get("/static/display.js").text
+        self.assertIn("data-pp-keyboard-toggle", self.client.get("/static/common.js").text)
+        self.assertIn("data-pp-controls-toggle", self.client.get("/static/common.js").text)
+        self.assertIn("/api/integrations/propresenter/navigate/", display_script)
+        self.assertIn("keyboardStorageKey", display_script)
         self.assertFalse(playlist["settings"]["keyboard_control"])
 
     def test_runtime_and_manual_service_selection(self):
