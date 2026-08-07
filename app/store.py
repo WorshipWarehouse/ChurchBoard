@@ -106,9 +106,6 @@ class ConfigStore:
                 dashboard.pop("theme", None)
                 if dashboard.get("id") == "audio" and not any(widget.get("type") == "spl" for widget in dashboard.get("widgets", [])):
                     dashboard.setdefault("widgets", []).append({"id": "osm", "type": "spl", "x": 7, "y": 8, "w": 5, "h": 3, "title": "Open Sound Meter", "settings": {"green_max": 75, "orange_max": 85, "reports_enabled": True}})
-                if not any(widget.get("type") == "playlist" for widget in dashboard.get("widgets", [])):
-                    next_row = max((int(widget.get("y", 0)) + int(widget.get("h", 1)) for widget in dashboard.get("widgets", [])), default=0)
-                    dashboard.setdefault("widgets", []).append({"id": "playlist", "type": "playlist", "x": 0, "y": next_row, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "keyboard_control": False, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400"}})
                 color = str(dashboard.get("background_color") or "").strip().lower()
                 valid_color = len(color) == 7 and color.startswith("#") and all(
                     character in "0123456789abcdef" for character in color[1:]

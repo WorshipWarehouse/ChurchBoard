@@ -42,25 +42,22 @@ Choose your computer and click its download link:
 
 | Your computer | Download |
 | --- | --- |
-| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Windows-x64-Setup.exe)** |
-| **Mac with Apple silicon** — M1 or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-macOS-arm64.dmg)** |
-| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-macOS-x86_64.dmg)** |
-| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Linux-amd64.deb)** |
-| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Linux-x86_64.tar.gz)** |
+| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-Windows-x64-Setup.exe)** |
+| **Mac with Apple silicon** — M1 or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-macOS-arm64.dmg)** |
+| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-macOS-x86_64.dmg)** |
+| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-Linux-amd64.deb)** |
+| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-Linux-x86_64.tar.gz)** |
 
 Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it says **Chip**, use Apple silicon. If it says **Processor**, use Intel.
 
 **Raspberry Pi:** jump to the [one-command Raspberry Pi installer](#raspberry-pi).
 
-[View all v1.3.2 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v1.3.2)
+[View all v1.3.3 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v1.3.3)
 
-### What's new in 1.3.2
+### What's new in 1.3.3
 
-- Control ProPresenter from its live Playlist widget with optional clickable slides and browser-local arrow-key/spacebar control.
-- Match Planning Center-linked non-song items such as `Message` even when the ProPresenter presentation has a different name.
-- Keep the current and next ProPresenter thumbnails aligned with the cues actually on air.
-- Monitor Shure SLX-D receivers, OBS Studio status, and all configured ProPresenter timers.
-- Cancel or delete dashboards safely, and fit dashboard/timing content more reliably at smaller display sizes.
+- Deleting the optional ProPresenter Playlist widget now keeps it deleted on every dashboard.
+- The live Playlist widget's **Slide controls** and **Arrow keys** settings use larger, clearer toggle switches.
 
 ## Install
 
