@@ -124,6 +124,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn("playlist_item_size", editor)
         self.assertIn("playlist_marker_size", editor)
         self.assertIn("playlist_active_border_color", editor)
+        self.assertIn("playlist_keyboard_control", editor)
+        self.assertIn("/api/integrations/propresenter/navigate/", self.client.get("/static/display.js").text)
+        self.assertFalse(playlist["settings"]["keyboard_control"])
 
     def test_runtime_and_manual_service_selection(self):
         runtime = self.client.get("/api/runtime").json()
@@ -154,6 +157,8 @@ class ApiTests(unittest.TestCase):
 
     def test_propresenter_remote_trigger_requires_explicit_setting(self):
         response = self.client.post("/api/integrations/propresenter/active-slide", json={"index": 0})
+        self.assertEqual(response.status_code, 403)
+        response = self.client.post("/api/integrations/propresenter/navigate/next")
         self.assertEqual(response.status_code, 403)
 
     def test_propresenter_playlist_diagnostics_requires_connection(self):

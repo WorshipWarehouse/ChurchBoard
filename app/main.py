@@ -490,6 +490,25 @@ async def propresenter_trigger_active_slide(payload: ProPresenterSlideTrigger, r
     return {"ok": True, "index": payload.index + 1}
 
 
+@app.post("/api/integrations/propresenter/navigate/{direction}")
+async def propresenter_navigate(direction: str, request: Request) -> dict:
+    settings = store_from(request).load()["settings"].get("propresenter", {})
+    if not settings.get("remote_control_enabled"):
+        raise HTTPException(403, "Enable ProPresenter remote slide triggering in Setup first")
+    client = ProPresenterClient(settings)
+    if not client.configured:
+        raise HTTPException(400, "ProPresenter is not connected")
+    try:
+        await client.trigger_navigation(direction)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Could not move ProPresenter {direction}: {exc}") from exc
+    finally:
+        await client.close()
+    return {"ok": True, "direction": direction}
+
+
 @app.get("/api/integrations/propresenter/playlist-diagnostics")
 async def propresenter_playlist_diagnostics(request: Request) -> dict:
     settings = store_from(request).load()["settings"].get("propresenter", {})

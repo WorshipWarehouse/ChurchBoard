@@ -14,6 +14,7 @@ class ProPresenterClient:
         self.settings = settings
         self._client: httpx.AsyncClient | None = None
         self._active_payload: dict[str, Any] = {}
+        self._active_playlist_payload: dict[str, Any] = {}
         self._playlist_payload: dict[str, Any] = {}
         self._playlist_items_payload: Any = []
         self._transport_payload: dict[str, Any] = {}
@@ -93,6 +94,7 @@ class ProPresenterClient:
         playlist_response = responses.get("playlist")
         if playlist_response is not None and playlist_response.is_success:
             active_playlist = playlist_response.json()
+            self._active_playlist_payload = active_playlist
             focused_response = responses.get("playlist_focused")
             focused_playlist = focused_response.json() if focused_response is not None and focused_response.is_success else {}
             # A presentation can be active without its playlist being focused.
@@ -151,7 +153,17 @@ class ProPresenterClient:
                 self._presentation_details_refreshed = clock
         detailed_presentation = self._presentation_details_payload if self._presentation_details_uuid == presentation_uuid else {}
         if detailed_presentation:
-            presentation = {**presentation, **detailed_presentation}
+            # The active response can contain the exact arrangement/order now
+            # being used while the detail response describes the library
+            # presentation. Use details to fill gaps, but never replace live
+            # groups or arrangement metadata with the library copy.
+            merged_identifier = {
+                **(detailed_presentation.get("id") if isinstance(detailed_presentation.get("id"), dict) else {}),
+                **(presentation.get("id") if isinstance(presentation.get("id"), dict) else {}),
+            }
+            presentation = {**detailed_presentation, **presentation}
+            if merged_identifier:
+                presentation["id"] = merged_identifier
         cue_entries = self._presentation_cue_entries(presentation)
         cue_total = self._cue_total(index_payload, len(cue_entries))
         current_position, next_position = self._cue_positions(cue_entries, current, next_slide, index)
@@ -164,7 +176,27 @@ class ProPresenterClient:
         current_result["notes"] = current_result["notes"] or self._notes(current_details)
         next_result["notes"] = next_result["notes"] or self._notes(next_details)
         presentation_uuid = self._presentation_uuid(presentation) or presentation_uuid
-        playlist_context = self._playlist_context(playlist_payload)
+        browser_playlist_context = self._playlist_context(playlist_payload)
+        active_playlist_context = self._playlist_context(self._active_playlist_payload)
+        # The playlist widget intentionally follows the focused playlist, but
+        # Planning Center LIVE must follow what is actually on air. Keeping
+        # these contexts separate prevents a focused song from masking an
+        # active Message (or any other differently named service item).
+        if (
+            active_playlist_context.get("service_item_title")
+            or active_playlist_context.get("service_item_index") is not None
+            or active_playlist_context.get("service_item_is_pco")
+        ):
+            playlist_context = {
+                **browser_playlist_context,
+                "service_item_title": active_playlist_context.get("service_item_title", ""),
+                "service_item_index": active_playlist_context.get("service_item_index"),
+                "service_item_is_pco": bool(active_playlist_context.get("service_item_is_pco")),
+                "active_playlist_name": active_playlist_context.get("playlist_name", ""),
+                "active_playlist_uuid": active_playlist_context.get("playlist_uuid", ""),
+            }
+        else:
+            playlist_context = browser_playlist_context
         if clock - self._transport_refreshed >= 0.5:
             transport_responses = await asyncio.gather(
                 self._http().get(f"{base}/v1/transport/presentation/current"),
@@ -332,6 +364,14 @@ class ProPresenterClient:
             raise ValueError("Invalid ProPresenter slide index")
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
         response = await self._http().get(f"{base}/v1/presentation/active/{index}/trigger")
+        response.raise_for_status()
+
+    async def trigger_navigation(self, direction: str) -> None:
+        """Move ProPresenter globally, including across playlist items."""
+        if direction not in {"next", "previous"}:
+            raise ValueError("Invalid ProPresenter navigation direction")
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        response = await self._http().get(f"{base}/v1/trigger/{direction}")
         response.raise_for_status()
 
     async def trigger_presentation_slide(self, presentation_uuid: str, index: int) -> None:

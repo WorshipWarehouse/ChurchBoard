@@ -79,6 +79,10 @@ Part labels use their ProPresenter colors. If parts do not change with the slide
 
 For the **ProPresenter playlist** widget, select the focused playlist in ProPresenter. ChurchBoard renders its placeholders and presentations in playlist order, and shows every slide in a presentation continuously with its section marker beneath the thumbnail. Click a presentation heading to trigger that item; click a slide thumbnail to trigger that exact slide. The widget settings let you adjust slide, playlist-item, and section-marker scale, as well as preview the active-slide border color before saving. ChurchBoard retains the playlist scroll position as live information refreshes.
 
+Enable **Use arrow keys and spacebar to control ProPresenter** in that widget's editor when an operator should drive ProPresenter from the board. Left Arrow or Up Arrow moves back; Right Arrow, Down Arrow, or Space advances. The command uses ProPresenter's global next/previous trigger, so it continues into the adjacent playlist item. Keyboard commands are ignored while the operator is typing in a field, using a button or menu, or holding a keyboard modifier. The separate **Allow ChurchBoard to trigger ProPresenter slides** option in Setup must also be enabled.
+
+The focused playlist is used for the playlist browser, while the active playlist item is used for Planning Center Services LIVE matching. This distinction lets an operator inspect another presentation without making ChurchBoard leave the item that is actually on air. For Planning Center-synced content, the active playlist position remains authoritative when the local presentation name differs from the Planning Center item title—for example, a scripture presentation named `John 1:1-3 (ASB)` linked to the plan item `Message`.
+
 ChurchBoard also publishes the active presentation as a slide-grid feed. Every
 cue includes its number, text, notes, ProPresenter part/color, active state,
 and a proxied thumbnail URL. This lets a Service Producer view present a

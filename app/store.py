@@ -16,7 +16,7 @@ DEFAULT_WIDGETS = [
     {"id": "assignments", "type": "assignments", "x": 0, "y": 2, "w": 7, "h": 6, "title": "Scheduled Positions & Mics", "settings": {"team_ids": [], "position_keys": [], "position_labels": {}, "positions": [], "display_mode": "photos", "card_grouping": "person", "use_planning_center_icon": False, "unassigned_media_title": "Icon"}},
     {"id": "slides", "type": "slides", "x": 7, "y": 2, "w": 5, "h": 4, "title": "ProPresenter", "settings": {"show_notes": True, "slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False}},
     {"id": "order", "type": "order", "x": 7, "y": 6, "w": 5, "h": 2, "title": "Order of Service", "settings": {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False}},
-    {"id": "playlist", "type": "playlist", "x": 0, "y": 8, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400"}},
+    {"id": "playlist", "type": "playlist", "x": 0, "y": 8, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "keyboard_control": False, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400"}},
 ]
 
 
@@ -108,7 +108,7 @@ class ConfigStore:
                     dashboard.setdefault("widgets", []).append({"id": "osm", "type": "spl", "x": 7, "y": 8, "w": 5, "h": 3, "title": "Open Sound Meter", "settings": {"green_max": 75, "orange_max": 85, "reports_enabled": True}})
                 if not any(widget.get("type") == "playlist" for widget in dashboard.get("widgets", [])):
                     next_row = max((int(widget.get("y", 0)) + int(widget.get("h", 1)) for widget in dashboard.get("widgets", [])), default=0)
-                    dashboard.setdefault("widgets", []).append({"id": "playlist", "type": "playlist", "x": 0, "y": next_row, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400"}})
+                    dashboard.setdefault("widgets", []).append({"id": "playlist", "type": "playlist", "x": 0, "y": next_row, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "keyboard_control": False, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400"}})
                 color = str(dashboard.get("background_color") or "").strip().lower()
                 valid_color = len(color) == 7 and color.startswith("#") and all(
                     character in "0123456789abcdef" for character in color[1:]
@@ -124,7 +124,7 @@ class ConfigStore:
                     if widget.get("type") == "slides":
                         widget["settings"] = {"slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False, "show_notes": True, "show_grid": False, "allow_remote_trigger": False, **widget.get("settings", {})}
                     if widget.get("type") == "playlist":
-                        widget["settings"] = {"allow_remote_trigger": True, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400", **widget.get("settings", {})}
+                        widget["settings"] = {"allow_remote_trigger": True, "keyboard_control": False, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400", **widget.get("settings", {})}
                     if widget.get("type") == "order":
                         widget["settings"] = {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
                     if widget.get("type") == "spl":
