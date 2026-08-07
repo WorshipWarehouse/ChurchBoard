@@ -30,6 +30,7 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 - Direct Open Sound Meter monitoring with selectable weighting/response and downloadable service graphs and per-item averages
 - Restream broadcast, viewer, and destination-status monitoring through OAuth
 - OBS Studio streaming/recording state, connection health, output statistics, dropped-frame warnings, and an optional preview image
+- Native lighting control for Chauvet ShowXpress, Showtec QuickDMX, Sweetlight Controller, and other TheLightingController-based apps, with their exposed Live buttons shown on a dashboard
 - Planning Center Services LIVE control buttons
 - A WYSIWYG dashboard editor with independent layouts and color-matched liquid-glass widgets for each destination
 
@@ -87,7 +88,7 @@ Open `http://127.0.0.1:8040/admin`, turn off demonstration data, and configure P
 
 ![ChurchBoard integrations setup](docs/screenshots/setup.jpg)
 
-Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Planning Center setup](docs/PLANNING_CENTER.md), [ProPresenter setup](docs/PROPRESENTER.md), [Open Sound Meter setup](docs/OPEN_SOUND_METER.md), and [Restream setup](docs/RESTREAM.md) guides. They cover secure credentials, permissions, photos, leaders, linked service playlists, the Network API, Services LIVE automation, dashboards, microphone mapping, level reporting, livestream monitoring, and troubleshooting.
+Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Planning Center setup](docs/PLANNING_CENTER.md), [ProPresenter setup](docs/PROPRESENTER.md), [Open Sound Meter setup](docs/OPEN_SOUND_METER.md), and [Restream setup](docs/RESTREAM.md) guides. To control ShowXpress-compatible lighting software, enable its External App and External Control settings, configure the matching address, port (normally 7348), and password in Setup, then add a Lighting controls widget to a dashboard. Only pages marked visible to external applications appear in ChurchBoard.
 
 ## Dashboard editing
 

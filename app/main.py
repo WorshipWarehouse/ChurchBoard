@@ -25,6 +25,7 @@ from app.services.spl_reports import SPLReportStore
 from app.services.planning_center import PlanningCenterClient
 from app.services.propresenter import ProPresenterClient
 from app.services.restream import RestreamClient
+from app.services.thelightingcontroller import TheLightingControllerClient
 from app.store import ConfigStore
 from app.update import download_update, update_status
 from app.version import __version__
@@ -63,6 +64,13 @@ class ProPresenterSlideTrigger(BaseModel):
 
 
 class ProPresenterNavigationRequest(BaseModel):
+    dashboard_slug: str | None = None
+    widget_id: str | None = None
+
+
+class LightingButtonTrigger(BaseModel):
+    name: str
+    mode: str = "toggle"
     dashboard_slug: str | None = None
     widget_id: str | None = None
 
@@ -198,6 +206,8 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
             settings.setdefault("restream", {})[secret_name] = existing_restream.get(secret_name, "")
     if not settings.get("obs", {}).get("password"):
         settings.setdefault("obs", {})["password"] = data["settings"].get("obs", {}).get("password", "")
+    if not settings.get("lighting", {}).get("password"):
+        settings.setdefault("lighting", {})["password"] = data["settings"].get("lighting", {}).get("password", "")
     data["settings"] = settings
     store.save(data)
     await request.app.state.runtime.refresh(force=True)
@@ -384,6 +394,44 @@ async def test_restream(request: Request) -> dict:
         raise HTTPException(502, f"Restream connection failed: {exc}") from exc
     finally:
         await client.close()
+
+
+@app.get("/api/integrations/lighting/buttons")
+async def lighting_buttons(request: Request) -> dict:
+    client = TheLightingControllerClient(store_from(request).load()["settings"].get("lighting", {}))
+    if not client.configured:
+        raise HTTPException(400, "Enable lighting control and save its computer address first")
+    try:
+        buttons = await client.buttons()
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Could not read lighting controls: {exc}") from exc
+    return {"connected": True, "items": buttons, "count": len(buttons)}
+
+
+def require_lighting_widget_control(request: Request, dashboard_slug: str | None, widget_id: str | None) -> dict:
+    data = store_from(request).load()
+    dashboard = next((item for item in data.get("dashboards", []) if str(item.get("slug") or "") == str(dashboard_slug or "")), None)
+    widget = next((item for item in (dashboard or {}).get("widgets", []) if str(item.get("id") or "") == str(widget_id or "")), None)
+    if not widget or widget.get("type") != "lighting" or widget.get("settings", {}).get("allow_remote_trigger") is False:
+        raise HTTPException(403, "Lighting triggering is disabled in this widget's settings")
+    return data["settings"].get("lighting", {})
+
+
+@app.post("/api/integrations/lighting/button")
+async def lighting_trigger_button(payload: LightingButtonTrigger, request: Request) -> dict:
+    settings = require_lighting_widget_control(request, payload.dashboard_slug, payload.widget_id)
+    client = TheLightingControllerClient(settings)
+    if not client.configured:
+        raise HTTPException(400, "Lighting control is not connected")
+    try:
+        await client.trigger_button(payload.name, payload.mode)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Could not trigger lighting button: {exc}") from exc
+    return {"ok": True, "name": payload.name, "mode": payload.mode}
 
 
 RESTREAM_CALLBACK_PATH = "/api/integrations/restream/callback"

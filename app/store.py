@@ -65,6 +65,7 @@ def default_data() -> dict[str, Any]:
             },
             "restream": {"enabled": False, "client_id": "", "client_secret": "", "access_token": "", "refresh_token": "", "access_token_expires_at": 0, "refresh_seconds": 5},
             "obs": {"enabled": False, "host": "127.0.0.1", "port": 4455, "password": "", "refresh_seconds": 0.5, "dropped_frames_threshold": 2, "preview_url": ""},
+            "lighting": {"enabled": False, "host": "127.0.0.1", "port": 7348, "password": ""},
             "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
             "manual_plan": None,
         },
@@ -93,7 +94,7 @@ class ConfigStore:
             baseline = default_data()
             baseline.update(raw)
             baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
-            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream", "obs"):
+            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream", "obs", "lighting"):
                 baseline["settings"][section] = {
                     **default_data()["settings"][section],
                     **raw.get("settings", {}).get(section, {}),
@@ -126,6 +127,8 @@ class ConfigStore:
                         widget["settings"] = {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
                     if widget.get("type") == "spl":
                         widget["settings"] = {"green_max": 75, "orange_max": 85, "reports_enabled": True, **widget.get("settings", {})}
+                    if widget.get("type") == "lighting":
+                        widget["settings"] = {"allow_remote_trigger": True, **widget.get("settings", {})}
             baseline["dashboards"] = [dashboard for dashboard in baseline["dashboards"] if dashboard.get("id") != "service-producer"]
             return baseline
 
@@ -158,4 +161,7 @@ class ConfigStore:
         obs = settings.get("obs", {})
         obs["password_configured"] = bool(obs.get("password"))
         obs["password"] = ""
+        lighting = settings.get("lighting", {})
+        lighting["password_configured"] = bool(lighting.get("password"))
+        lighting["password"] = ""
         return settings
