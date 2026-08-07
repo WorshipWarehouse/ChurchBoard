@@ -34,6 +34,13 @@ class TheLightingControllerClient:
             raise ValueError("Lighting button mode must be press, release, or toggle")
         reader, writer = await self._connect()
         try:
+            if mode == "press":
+                # A cue click is an unambiguous press.  Do not require the
+                # command name to appear in BUTTON_LIST: some TLC versions
+                # expose one-based captions while accepting zero-based cue
+                # identifiers (for example, displayed "1" accepts "0").
+                await self._send(writer, "BUTTON_PRESS", name)
+                return
             # Keep discovery and the command in the same authenticated session.
             # TLC installations commonly accept only one External App client.
             buttons = await self._button_list(reader, writer)
