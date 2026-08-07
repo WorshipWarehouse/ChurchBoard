@@ -8,6 +8,10 @@ from xml.etree import ElementTree
 class TheLightingControllerClient:
     """Client for TLC's External Application protocol (also used by ShowXpress)."""
 
+    # TLC/ShowXpress recognises this client identifier from its official Live
+    # Mobile/Companion-compatible External App protocol implementation.
+    APP_NAME = "thelightingcontrollerclient"
+
     def __init__(self, settings: dict[str, Any]):
         self.settings = settings
 
@@ -66,7 +70,7 @@ class TheLightingControllerClient:
         except OSError as exc:
             detail = exc.strerror or str(exc) or exc.__class__.__name__
             raise ConnectionError(f"Could not connect to {host}:{port}: {detail}") from exc
-        await self._send(writer, "HELLO", "churchboard", str(self.settings.get("password") or ""))
+        await self._send(writer, "HELLO", self.APP_NAME, str(self.settings.get("password") or ""))
         while True:
             line = await self._read_line(reader, "the ShowXpress/TLC sign-in reply")
             if not line:
