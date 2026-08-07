@@ -113,6 +113,8 @@ class ConfigStore:
                 )
                 dashboard["background_color"] = color if valid_color else "#0a0d12"
                 for widget in dashboard.get("widgets", []):
+                    if widget.get("type") == "lighting" and widget.get("title") == "Lighting controls":
+                        widget["title"] = "ShowXpress Control"
                     if widget.get("type") == "mics":
                         widget["type"] = "assignments"
                         if widget.get("title") in {"", "Microphones"}:

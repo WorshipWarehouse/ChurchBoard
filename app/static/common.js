@@ -145,7 +145,7 @@ const enhanceDynamicContent = (root=document) => {
   }));requestAnimationFrame(()=>resizeDashboardContent(root));
   if(!root._churchBoardResizeObserver&&window.ResizeObserver){root._churchBoardResizeObserver=new ResizeObserver(()=>resizeDashboardContent(root));root._churchBoardResizeObserver.observe(root)}
 };
-const widgetNames = {clock:"Clock",service:"Service",timing:"Timers",assignments:"Scheduled Positions & Mics",mics:"Scheduled Positions & Mics",slides:"ProPresenter slides",playlist:"ProPresenter playlist",notes:"Slide notes",order:"Order of service",people:"Team members",spl:"Open Sound Meter",controls:"Service controls",lighting:"Lighting controls",person:"Scheduled person",restream:"Restream livestream",obs:"OBS live monitor",propresenter_timers:"ProPresenter timers",text:"Custom text"};
+const widgetNames = {clock:"Clock",service:"Service",timing:"Timers",assignments:"Scheduled Positions & Mics",mics:"Scheduled Positions & Mics",slides:"ProPresenter slides",playlist:"ProPresenter playlist",notes:"Slide notes",order:"Order of service",people:"Team members",spl:"Open Sound Meter",controls:"Service controls",lighting:"ShowXpress Control",person:"Scheduled person",restream:"Restream livestream",obs:"OBS live monitor",propresenter_timers:"ProPresenter timers",text:"Custom text"};
 const widgetMarkup = (widget, state) => {
   const settings=widget.settings||{}, service=state.service||{}, timing=state.timing||{}, pp=state.propresenter||{};
   let content="";

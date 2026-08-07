@@ -8,8 +8,8 @@ let dashboard,selected=null,dirty=false,catalogTeams=[],catalogError="";
 const newId=type=>`${type}-${Date.now().toString(36)}`;
 const defaults={clock:{w:3,h:2},service:{w:5,h:2},timing:{w:4,h:2},assignments:{w:7,h:6,team_ids:[],position_keys:[],position_labels:{},display_mode:"photos",card_grouping:"person",use_planning_center_icon:false,unassigned_media_title:"Icon"},slides:{w:6,h:4,show_notes:true,slide_mode:"image",slide_layout:"full",show_current:true,show_next:true,show_parts:true,show_slide_count:false},playlist:{w:6,h:7,allow_remote_trigger:true,keyboard_control:false,slide_size:120,item_size:48,marker_size:10,active_border_color:"#f5c400"},notes:{w:4,h:2},order:{w:5,h:3,display_mode:"current",limit:6,show_leader:false,show_mic:false},people:{w:4,h:4,team_ids:[],position_keys:[],position_labels:{}},spl:{w:4,h:3,green_max:75,orange_max:85,weighting:"A",response:"Fast"},controls:{w:4,h:2},lighting:{w:6,h:4,allow_remote_trigger:true,page_size:18,scene_size:58,active_border_color:"#55e6a5",active_border_width:5},restream:{w:5,h:4},obs:{w:5,h:4},propresenter_timers:{w:5,h:3},text:{w:4,h:2,text:"Custom text"}};
 const integrationGroups=[
-  {name:"ChurchBoard",icon:"⌘",types:["clock","service","timing","controls","text"]},
-  {name:"Planning Center",icon:"P",types:["assignments","people","person","order"]},
+  {name:"ChurchBoard",icon:"⌘",types:["clock","text"]},
+  {name:"Planning Center",icon:"P",types:["service","timing","controls","assignments","people","person","order"]},
   {name:"ProPresenter",icon:"▶",types:["slides","playlist","notes","propresenter_timers"]},
   {name:"Audio",icon:"♫",types:["spl"]},
   {name:"Lighting",icon:"✦",types:["lighting"]},
