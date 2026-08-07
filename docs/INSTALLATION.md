@@ -6,13 +6,13 @@ ChurchBoard runs a small local web server and displays its interface in a browse
 
 | Platform | Installer |
 | --- | --- |
-| Windows 10 or 11 | **[Download for Windows (.exe)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Windows-x64-Setup.exe)** |
-| Apple silicon Mac — M1 or newer | **[Download for Apple silicon Mac (.dmg)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-macOS-arm64.dmg)** |
-| Intel Mac | **[Download for Intel Mac (.dmg)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-macOS-x86_64.dmg)** |
-| Ubuntu or Debian Linux | **[Download for Linux (.deb)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Linux-amd64.deb)** |
-| Other 64-bit Linux | **[Download the portable Linux package (.tar.gz)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Linux-x86_64.tar.gz)** |
+| Windows 10 or 11 | **[Download for Windows (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Windows-x64-Setup.exe)** |
+| Apple silicon Mac — M1 or newer | **[Download for Apple silicon Mac (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-macOS-arm64.dmg)** |
+| Intel Mac | **[Download for Intel Mac (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-macOS-x86_64.dmg)** |
+| Ubuntu or Debian Linux | **[Download for Linux (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Linux-amd64.deb)** |
+| Other 64-bit Linux | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Linux-x86_64.tar.gz)** |
 
-[See every v1.3.1 download](https://github.com/WorshipWarehouse/ChurchBoard/releases/tag/v1.3.1)
+[See every v1.3.2 download](https://github.com/wtapper89/ChurchBoard/releases/tag/v1.3.2)
 
 When the repository is private, sign in to the GitHub account that has access before downloading. The links work normally without sign-in after the repository is public.
 
@@ -31,7 +31,7 @@ http://CHURCHBOARD-COMPUTER-IP:8040/display/main
 ## Windows 10 and 11
 
 1. Use the **Download for Windows** link above.
-2. Open `ChurchBoard-1.3.1-Windows-x64-Setup.exe`.
+2. Open `ChurchBoard-1.3.2-Windows-x64-Setup.exe`.
 3. Run the installer. Leave **Start ChurchBoard automatically when I sign in** checked.
 4. When Windows Firewall asks, allow ChurchBoard on **Private networks** if displays on other production computers need to connect.
 5. ChurchBoard starts and opens its desktop control page.
@@ -112,7 +112,7 @@ Run the included `uninstall.sh` to remove the application and startup service wh
 On 64-bit or 32-bit Raspberry Pi OS, open Terminal as the normal desktop user and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/WorshipWarehouse/ChurchBoard/main/installers/raspberry-pi/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/wtapper89/ChurchBoard/main/installers/raspberry-pi/install.sh | bash
 ```
 
 This raw download requires a public repository. During private testing, clone the repository with an authorized GitHub account and run `installers/raspberry-pi/install.sh` from the clone instead.
@@ -120,7 +120,7 @@ This raw download requires a public repository. During private testing, clone th
 For a dedicated display, install Chromium kiosk startup too:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/WorshipWarehouse/ChurchBoard/main/installers/raspberry-pi/install.sh | bash -s -- --kiosk
+curl -fsSL https://raw.githubusercontent.com/wtapper89/ChurchBoard/main/installers/raspberry-pi/install.sh | bash -s -- --kiosk
 ```
 
 The Pi installer:

@@ -214,6 +214,7 @@ class RuntimeService:
                         live_config,
                         service_item_title=str(fresh_presentation.get("service_item_title") or ""),
                         service_item_index=fresh_presentation.get("service_item_index"),
+                        service_item_index_is_absolute=bool(fresh_presentation.get("service_item_index_is_absolute")),
                         is_pco_item=bool(fresh_presentation.get("service_item_is_pco")),
                     )
                     if preliminary_match:
@@ -391,13 +392,14 @@ class RuntimeService:
         title = str(presentation.get("title") or "").strip()
         service_item_title = str(presentation.get("service_item_title") or "").strip()
         service_item_index = presentation.get("service_item_index")
+        service_item_index_is_absolute = bool(presentation.get("service_item_index_is_absolute"))
         is_pco_item = bool(presentation.get("service_item_is_pco"))
         match_title = service_item_title if is_pco_item and service_item_title else title
         if not presentation.get("connected") or not match_title:
             state["planning_center_live"] = {**base_status, "message": "Waiting for an active ProPresenter presentation"}
             return
         current_item_id = str((live or {}).get("current_item_id") or ((state.get("timing") or {}).get("current_item") or {}).get("id") or "")
-        target = self._match_presentation_item(title, service.get("items") or [], current_item_id, settings, service_item_title=service_item_title, service_item_index=service_item_index, is_pco_item=is_pco_item)
+        target = self._match_presentation_item(title, service.get("items") or [], current_item_id, settings, service_item_title=service_item_title, service_item_index=service_item_index, service_item_index_is_absolute=service_item_index_is_absolute, is_pco_item=is_pco_item)
         if target:
             presentation["planning_center_item_id"] = target.get("id")
             presentation["planning_center_item_title"] = target.get("title")
@@ -569,8 +571,12 @@ class RuntimeService:
         return candidate
 
     @classmethod
-    def _match_presentation_item(cls, title: str, items: list[dict[str, Any]], current_item_id: str, settings: dict[str, Any], *, service_item_title: str = "", service_item_index: int | None = None, is_pco_item: bool = False) -> dict[str, Any] | None:
+    def _match_presentation_item(cls, title: str, items: list[dict[str, Any]], current_item_id: str, settings: dict[str, Any], *, service_item_title: str = "", service_item_index: int | None = None, service_item_index_is_absolute: bool = False, is_pco_item: bool = False) -> dict[str, Any] | None:
         candidates = list(items)
+        if is_pco_item and service_item_index_is_absolute and isinstance(service_item_index, int) and 0 <= service_item_index < len(items):
+            linked_item = items[service_item_index]
+            if str(linked_item.get("item_type") or "").casefold() != "header":
+                return linked_item
         song_candidates = [item for item in candidates if str(item.get("item_type") or "").casefold() == "song"]
         preferred = candidates if is_pco_item or not settings.get("songs_only", True) else song_candidates
         source_title = service_item_title if is_pco_item and service_item_title else title

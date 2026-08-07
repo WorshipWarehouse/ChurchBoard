@@ -16,9 +16,9 @@ The initial cross-platform dashboard concept also drew inspiration from [NewsTal
 
 ## Trademarks and third-party services
 
-ChurchBoard is an independent project. It is not affiliated with, authorized by, sponsored by, or endorsed by Planning Center, Shure, Sennheiser, Renewed Vision, ProPresenter, Open Sound Meter, Restream, Micboard, Apple, Microsoft, or the Raspberry Pi Foundation.
+ChurchBoard is an independent project. It is not affiliated with, authorized by, sponsored by, or endorsed by Planning Center, Shure, Sennheiser, Renewed Vision, ProPresenter, OBS Studio, Open Sound Meter, Restream, Micboard, Apple, Microsoft, or the Raspberry Pi Foundation.
 
-Planning Center, Shure, QLX-D, ULX-D, Sennheiser, EW-DX, Renewed Vision, ProPresenter, Open Sound Meter, Restream, Apple, macOS, Mac, Microsoft, Windows, and Raspberry Pi are trademarks or registered trademarks of their respective owners. Their names are used only to identify compatible products or services.
+Planning Center, Shure, QLX-D, ULX-D, SLX-D, Sennheiser, EW-DX, Renewed Vision, ProPresenter, OBS Studio, Open Sound Meter, Restream, Apple, macOS, Mac, Microsoft, Windows, and Raspberry Pi are trademarks or registered trademarks of their respective owners. Their names are used only to identify compatible products or services.
 
 Use of third-party APIs, devices, accounts, media, and services remains subject to the applicable owner's terms, licenses, privacy policies, permissions, and rate limits. Users are responsible for obtaining permission to display Planning Center profile photos or other personal data on ChurchBoard screens.
 

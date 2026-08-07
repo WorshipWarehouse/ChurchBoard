@@ -14,6 +14,7 @@ class ProPresenterClient:
         self.settings = settings
         self._client: httpx.AsyncClient | None = None
         self._active_payload: dict[str, Any] = {}
+        self._active_playlist_payload: dict[str, Any] = {}
         self._playlist_payload: dict[str, Any] = {}
         self._playlist_items_payload: Any = []
         self._transport_payload: dict[str, Any] = {}
@@ -93,6 +94,7 @@ class ProPresenterClient:
         playlist_response = responses.get("playlist")
         if playlist_response is not None and playlist_response.is_success:
             active_playlist = playlist_response.json()
+            self._active_playlist_payload = active_playlist
             focused_response = responses.get("playlist_focused")
             focused_playlist = focused_response.json() if focused_response is not None and focused_response.is_success else {}
             # A presentation can be active without its playlist being focused.
@@ -151,7 +153,17 @@ class ProPresenterClient:
                 self._presentation_details_refreshed = clock
         detailed_presentation = self._presentation_details_payload if self._presentation_details_uuid == presentation_uuid else {}
         if detailed_presentation:
-            presentation = {**presentation, **detailed_presentation}
+            # The active response can contain the exact arrangement/order now
+            # being used while the detail response describes the library
+            # presentation. Use details to fill gaps, but never replace live
+            # groups or arrangement metadata with the library copy.
+            merged_identifier = {
+                **(detailed_presentation.get("id") if isinstance(detailed_presentation.get("id"), dict) else {}),
+                **(presentation.get("id") if isinstance(presentation.get("id"), dict) else {}),
+            }
+            presentation = {**detailed_presentation, **presentation}
+            if merged_identifier:
+                presentation["id"] = merged_identifier
         cue_entries = self._presentation_cue_entries(presentation)
         cue_total = self._cue_total(index_payload, len(cue_entries))
         current_position, next_position = self._cue_positions(cue_entries, current, next_slide, index)
@@ -164,7 +176,45 @@ class ProPresenterClient:
         current_result["notes"] = current_result["notes"] or self._notes(current_details)
         next_result["notes"] = next_result["notes"] or self._notes(next_details)
         presentation_uuid = self._presentation_uuid(presentation) or presentation_uuid
-        playlist_context = self._playlist_context(playlist_payload)
+        browser_playlist_context = self._playlist_context(playlist_payload)
+        active_playlist_context = self._playlist_context(self._active_playlist_payload)
+        # The playlist widget intentionally follows the focused playlist, but
+        # Planning Center LIVE must follow what is actually on air. Keeping
+        # these contexts separate prevents a focused song from masking an
+        # active Message (or any other differently named service item).
+        if (
+            active_playlist_context.get("service_item_title")
+            or active_playlist_context.get("service_item_index") is not None
+            or active_playlist_context.get("service_item_is_pco")
+        ):
+            playlist_context = {
+                **browser_playlist_context,
+                "service_item_title": active_playlist_context.get("service_item_title", ""),
+                "service_item_index": active_playlist_context.get("service_item_index"),
+                "service_item_is_pco": bool(active_playlist_context.get("service_item_is_pco")),
+                "active_playlist_name": active_playlist_context.get("playlist_name", ""),
+                "active_playlist_uuid": active_playlist_context.get("playlist_uuid", ""),
+            }
+        else:
+            playlist_context = browser_playlist_context
+        playlist_presentations = self._playlist_presentations(self._playlist_items_payload, playlist_context)
+        linked_playlist_row = next(
+            (
+                row for row in playlist_presentations
+                if presentation_uuid
+                and row.get("presentation_uuid") == presentation_uuid
+                and row.get("is_pco")
+            ),
+            None,
+        )
+        if linked_playlist_row:
+            # A Planning Center-synced presentation can keep a local filename
+            # (for example John 1_1-3) while its playlist row is linked to the
+            # Planning Center Message item. The row index includes headers and
+            # pre-service items, so preserve that absolute index explicitly.
+            playlist_context["service_item_index"] = linked_playlist_row["index"]
+            playlist_context["service_item_index_is_absolute"] = True
+            playlist_context["service_item_is_pco"] = True
         if clock - self._transport_refreshed >= 0.5:
             transport_responses = await asyncio.gather(
                 self._http().get(f"{base}/v1/transport/presentation/current"),
@@ -207,7 +257,6 @@ class ProPresenterClient:
             if next_result["image_uuid"] or next_details else "",
             "timer_text": self._countdown_text(next_result.get("text")),
         })
-        playlist_presentations = self._playlist_presentations(self._playlist_items_payload, playlist_context)
         for item in playlist_presentations:
             item_uuid = item.get("presentation_uuid") or ""
             item_details = self._playlist_presentation_details.get(item_uuid) or {}
@@ -334,6 +383,14 @@ class ProPresenterClient:
         response = await self._http().get(f"{base}/v1/presentation/active/{index}/trigger")
         response.raise_for_status()
 
+    async def trigger_navigation(self, direction: str) -> None:
+        """Move ProPresenter globally, including across playlist items."""
+        if direction not in {"next", "previous"}:
+            raise ValueError("Invalid ProPresenter navigation direction")
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        response = await self._http().get(f"{base}/v1/trigger/{direction}")
+        response.raise_for_status()
+
     async def trigger_presentation_slide(self, presentation_uuid: str, index: int) -> None:
         """Trigger a cue by UUID, falling back for PCO-linked presentations."""
         if not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid or ""):
@@ -387,13 +444,15 @@ class ProPresenterClient:
         item = destination.get("item") if isinstance(destination.get("item"), dict) else {}
         playlist_item = destination.get("playlist_item") if isinstance(destination.get("playlist_item"), dict) else {}
         identifier = playlist_item.get("id") if isinstance(playlist_item.get("id"), dict) else {}
-        raw_index = item.get("index", identifier.get("index"))
-        try:
-            index = int(raw_index)
-            if index < 0 or index >= 2**31:
-                index = None
-        except (TypeError, ValueError):
-            index = None
+        index = None
+        for raw_index in (item.get("index"), identifier.get("index")):
+            try:
+                candidate = int(raw_index)
+                if 0 <= candidate < 2**31:
+                    index = candidate
+                    break
+            except (TypeError, ValueError):
+                continue
         playlist_identifier = playlist.get("id") if isinstance(playlist.get("id"), dict) else playlist
         return {
             "service_item_title": str(item.get("name") or identifier.get("name") or "").strip(),
@@ -586,14 +645,11 @@ class ProPresenterClient:
         if not sequence_ids:
             return cls._cue_entries(raw)
 
-        referenced = set(sequence_ids)
-        first_arranged = next((index for index, group in enumerate(groups) if identifier(group) in referenced), 0)
         entries: list[dict[str, Any]] = []
-        # Thumbnail indexes include leading media/background cues even though
-        # presentation_index and the active arrangement do not.
-        for group in groups[:first_arranged]:
-            if isinstance(group, dict):
-                entries.extend(cls._cue_entries(group))
+        # ProPresenter's thumbnail and presentation-index routes address the
+        # active arrangement itself. Library groups that are not referenced by
+        # that arrangement must not be inserted ahead of it, or every thumbnail
+        # and active-cue marker after that point is shifted.
         for group_id in sequence_ids:
             entries.extend(cls._cue_entries(group_map[group_id]))
         return entries
@@ -741,8 +797,10 @@ class ProPresenterClient:
             raise ValueError("Invalid ProPresenter presentation or slide index")
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
         async with httpx.AsyncClient(timeout=5) as client:
+            # Presentation state and trigger routes use zero-based cue indexes,
+            # while ProPresenter's thumbnail route uses one-based cue numbers.
             response = await client.get(
-                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/thumbnail/{index}",
+                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/thumbnail/{index + 1}",
                 params={"quality": 960, "thumbnail_type": "jpeg"},
                 headers={"Accept": "image/jpeg"},
             )

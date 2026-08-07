@@ -1,4 +1,4 @@
-let dashboard,lastState={},serverInstance="",refreshInFlight=false,planOptionsKey="",planSelectionInFlight=false,lastFullRefresh=0,compactEtag="";
+let dashboard,lastState={},serverInstance="",refreshInFlight=false,planOptionsKey="",planSelectionInFlight=false,lastFullRefresh=0,compactEtag="",ppKeyboardInFlight=false;
 const widgetRenderKeys=new Map();
 const orderScrollPositions=new Map();
 const playlistScrollPositions=new Map();
@@ -14,8 +14,25 @@ function fitDashboardToViewport(){
 }
 function queueDashboardFit(){cancelAnimationFrame(dashboardFitFrame);dashboardFitFrame=requestAnimationFrame(fitDashboardToViewport)}
 function updateNativeSpl(){const osm=lastState.osm||{};document.querySelectorAll("[data-spl-meter]").forEach(meter=>{const value=Number(osm[meter.dataset.osmKey||"a_fast"]),green=Number(meter.dataset.green),orange=Number(meter.dataset.orange),reading=meter.querySelector("[data-spl-value]"),status=meter.querySelector("[data-spl-status]");if(!osm.connected||!Number.isFinite(value)){if(reading)reading.textContent="--";if(status)status.textContent="Waiting for Open Sound Meter";meter.classList.remove("spl-green","spl-orange","spl-red");return}if(reading)reading.textContent=value.toFixed(1);meter.classList.toggle("spl-green",value<=green);meter.classList.toggle("spl-orange",value>green&&value<=orange);meter.classList.toggle("spl-red",value>orange);if(status)status.textContent=`${osm.source_name||"OSM source"} · ${meter.dataset.osmLabel||"level"}`})}
-document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppTrigger),playlistIndex=Number(button.dataset.ppPlaylistIndex);if(!Number.isInteger(index)||index<0||!Number.isInteger(playlistIndex)||playlistIndex<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-slide",{method:"POST",body:JSON.stringify({index,playlist_index:playlistIndex,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true"})});await refresh(true)}catch(error){alert(error.message)}finally{button.disabled=false}});
-document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-playlist-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppPlaylistTrigger);if(!Number.isInteger(index)||index<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-playlist-item",{method:"POST",body:JSON.stringify({index,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true"})})}catch(error){alert(error.message)}finally{button.disabled=false}});
+const triggerScope=element=>({dashboard_slug:slug,widget_id:element.closest(".widget")?.dataset.widget||null});
+document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppTrigger),playlistIndex=Number(button.dataset.ppPlaylistIndex);if(!Number.isInteger(index)||index<0||!Number.isInteger(playlistIndex)||playlistIndex<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-slide",{method:"POST",body:JSON.stringify({index,playlist_index:playlistIndex,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true",...triggerScope(button)})});await refresh(true)}catch(error){alert(error.message)}finally{button.disabled=false}});
+document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-playlist-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppPlaylistTrigger);if(!Number.isInteger(index)||index<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-playlist-item",{method:"POST",body:JSON.stringify({index,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true",...triggerScope(button)})})}catch(error){alert(error.message)}finally{button.disabled=false}});
+const keyboardStorageKey=widgetId=>`churchboard:${slug}:propresenter-keyboard:${widgetId}`;
+function syncPlaylistOperatorToggles(root=document){root.querySelectorAll('[data-widget-type="playlist"]').forEach(element=>{const widgetId=element.dataset.widget,controls=element.querySelector("[data-pp-controls-toggle]"),keyboard=element.querySelector("[data-pp-keyboard-toggle]");if(!keyboard)return;const controlsEnabled=!!controls?.checked;keyboard.disabled=!controlsEnabled;keyboard.checked=controlsEnabled&&localStorage.getItem(keyboardStorageKey(widgetId))==="true"})}
+function keyboardPlaylistWidget(){const toggle=document.querySelector('[data-widget-type="playlist"] [data-pp-keyboard-toggle]:checked:not(:disabled)'),widgetId=toggle?.closest(".widget")?.dataset.widget;return(dashboard?.widgets||[]).find(widget=>String(widget.id)===String(widgetId))}
+function setPlaylistKeyboardStatus(message,isError=false){document.querySelectorAll("[data-pp-keyboard-status]").forEach(element=>{element.textContent=message;element.classList.toggle("error",isError)})}
+document.addEventListener("change",async event=>{
+  const keyboard=event.target.closest("[data-pp-keyboard-toggle]");if(keyboard){const widgetId=keyboard.closest(".widget")?.dataset.widget;if(widgetId)localStorage.setItem(keyboardStorageKey(widgetId),String(keyboard.checked));setPlaylistKeyboardStatus(keyboard.checked?"←/↑ back · →/↓/Space next":"");return}
+  const controls=event.target.closest("[data-pp-controls-toggle]");if(!controls)return;const widgetId=controls.closest(".widget")?.dataset.widget,widget=(dashboard?.widgets||[]).find(item=>String(item.id)===String(widgetId));if(!widget)return;controls.disabled=true;widget.settings={...(widget.settings||{}),allow_remote_trigger:controls.checked};if(!controls.checked)localStorage.setItem(keyboardStorageKey(widgetId),"false");try{dashboard=await api(`/api/dashboards/${encodeURIComponent(dashboard.id)}`,{method:"PUT",body:JSON.stringify(dashboard)});widgetRenderKeys.delete(String(widgetId));render()}catch(error){widget.settings.allow_remote_trigger=!controls.checked;controls.checked=!controls.checked;controls.disabled=false;alert(error.message)}
+});
+document.addEventListener("keydown",async event=>{
+  const playlistWidget=keyboardPlaylistWidget();if(!playlistWidget||ppKeyboardInFlight||event.defaultPrevented||event.repeat||event.metaKey||event.ctrlKey||event.altKey)return;
+  const target=event.target;if(target instanceof Element&&(target.closest("input,textarea,select,button,a,[contenteditable=true]")||target.closest(".display-menu.open")))return;
+  const direction=["ArrowLeft","ArrowUp"].includes(event.key)?"previous":["ArrowRight","ArrowDown"," "].includes(event.key)?"next":"";if(!direction)return;
+  event.preventDefault();ppKeyboardInFlight=true;setPlaylistKeyboardStatus(direction==="next"?"Advancing ProPresenter…":"Going back in ProPresenter…");
+  try{await api(`/api/integrations/propresenter/navigate/${direction}`,{method:"POST",body:JSON.stringify({dashboard_slug:slug,widget_id:playlistWidget.id})});await refresh(true);setPlaylistKeyboardStatus("Keyboard: ←/↑ back · →/↓/Space next")}
+  catch(error){setPlaylistKeyboardStatus(error.message,true)}finally{ppKeyboardInFlight=false}
+});
 async function loadBoard(){
   dashboard=await api(`/api/dashboards/${encodeURIComponent(slug)}`);
   document.title=`${dashboard.name} · ChurchBoard`;
@@ -78,7 +95,7 @@ function render(){
   for(const [id,element] of existing){if(!activeIds.has(id)){element.remove();widgetRenderKeys.delete(id);orderScrollPositions.delete(id);playlistScrollPositions.delete(id);changed=true}}
   if(!widgets.length&&root.innerHTML!==`<div class="empty">This dashboard has no widgets.</div>`){root.innerHTML=`<div class="empty">This dashboard has no widgets.</div>`;changed=true}
   updateTimingWidgets();updateOrderTimingWidgets();
-  if(changed){tickClocks();enhanceDynamicContent(root)}
+  if(changed){tickClocks();enhanceDynamicContent(root);syncPlaylistOperatorToggles(root)}
   queueDashboardFit();
   updateNativeSpl();
 }

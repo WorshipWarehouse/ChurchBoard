@@ -58,6 +58,13 @@ class ProPresenterSlideTrigger(BaseModel):
     presentation_uuid: str | None = None
     playlist_index: int | None = None
     is_pco: bool = False
+    dashboard_slug: str | None = None
+    widget_id: str | None = None
+
+
+class ProPresenterNavigationRequest(BaseModel):
+    dashboard_slug: str | None = None
+    widget_id: str | None = None
 
 
 @asynccontextmanager
@@ -466,11 +473,24 @@ async def propresenter_thumbnail(presentation_uuid: str, index: int, request: Re
     return Response(content=content, media_type=media_type, headers={"Cache-Control": "private, max-age=2"})
 
 
+def require_propresenter_widget_control(request: Request, dashboard_slug: str | None, widget_id: str | None) -> dict:
+    data = store_from(request).load()
+    dashboard = next(
+        (item for item in data.get("dashboards", []) if str(item.get("slug") or "") == str(dashboard_slug or "")),
+        None,
+    )
+    widget = next(
+        (item for item in (dashboard or {}).get("widgets", []) if str(item.get("id") or "") == str(widget_id or "")),
+        None,
+    )
+    if not widget or widget.get("type") != "playlist" or widget.get("settings", {}).get("allow_remote_trigger") is False:
+        raise HTTPException(403, "Enable ProPresenter triggering in this Playlist widget's settings")
+    return data["settings"].get("propresenter", {})
+
+
 @app.post("/api/integrations/propresenter/active-slide")
 async def propresenter_trigger_active_slide(payload: ProPresenterSlideTrigger, request: Request) -> dict:
-    settings = store_from(request).load()["settings"].get("propresenter", {})
-    if not settings.get("remote_control_enabled"):
-        raise HTTPException(403, "Enable ProPresenter remote slide triggering in Setup first")
+    settings = require_propresenter_widget_control(request, payload.dashboard_slug, payload.widget_id)
     client = ProPresenterClient(settings)
     if not client.configured:
         raise HTTPException(400, "ProPresenter is not connected")
@@ -490,6 +510,23 @@ async def propresenter_trigger_active_slide(payload: ProPresenterSlideTrigger, r
     return {"ok": True, "index": payload.index + 1}
 
 
+@app.post("/api/integrations/propresenter/navigate/{direction}")
+async def propresenter_navigate(direction: str, request: Request, payload: ProPresenterNavigationRequest | None = None) -> dict:
+    settings = require_propresenter_widget_control(request, payload.dashboard_slug if payload else None, payload.widget_id if payload else None)
+    client = ProPresenterClient(settings)
+    if not client.configured:
+        raise HTTPException(400, "ProPresenter is not connected")
+    try:
+        await client.trigger_navigation(direction)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Could not move ProPresenter {direction}: {exc}") from exc
+    finally:
+        await client.close()
+    return {"ok": True, "direction": direction}
+
+
 @app.get("/api/integrations/propresenter/playlist-diagnostics")
 async def propresenter_playlist_diagnostics(request: Request) -> dict:
     settings = store_from(request).load()["settings"].get("propresenter", {})
@@ -506,9 +543,7 @@ async def propresenter_playlist_diagnostics(request: Request) -> dict:
 
 @app.post("/api/integrations/propresenter/active-playlist-item")
 async def propresenter_trigger_active_playlist_item(payload: ProPresenterSlideTrigger, request: Request) -> dict:
-    settings = store_from(request).load()["settings"].get("propresenter", {})
-    if not settings.get("remote_control_enabled"):
-        raise HTTPException(403, "Enable ProPresenter remote slide triggering in Setup first")
+    settings = require_propresenter_widget_control(request, payload.dashboard_slug, payload.widget_id)
     client = ProPresenterClient(settings)
     if not client.configured:
         raise HTTPException(400, "ProPresenter is not connected")
