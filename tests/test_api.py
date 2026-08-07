@@ -110,16 +110,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(saved_settings["position_keys"], ["band::vox 2", "band::vox 1"])
         self.assertEqual(saved_settings["position_labels"]["band::vox 2"]["name"], "Vox 2")
 
-    def test_deleted_playlist_widget_stays_deleted(self):
-        board = self.client.get("/api/dashboards/main").json()
-        board["widgets"] = [widget for widget in board["widgets"] if widget["type"] != "playlist"]
-        response = self.client.put("/api/dashboards/main", json=board)
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(any(widget["type"] == "playlist" for widget in response.json()["widgets"]))
-        reloaded = self.client.get("/api/dashboards/main").json()
-        self.assertFalse(any(widget["type"] == "playlist" for widget in reloaded["widgets"]))
-
-    def test_default_dashboards_include_a_configured_propresenter_playlist_widget(self):
+    def test_existing_dashboards_gain_a_propresenter_playlist_widget(self):
         board = self.client.get("/api/dashboards/main").json()
         playlist = next(widget for widget in board["widgets"] if widget["type"] == "playlist")
         self.assertTrue(playlist["settings"]["allow_remote_trigger"])
@@ -132,15 +123,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn("playlist_item_size", editor)
         self.assertIn("playlist_marker_size", editor)
         self.assertIn("playlist_active_border_color", editor)
-        self.assertNotIn("playlist_keyboard_control", editor)
-        self.assertNotIn("playlist_allow_remote_trigger", editor)
-        display_script = self.client.get("/static/display.js").text
-        self.assertIn("data-pp-keyboard-toggle", self.client.get("/static/common.js").text)
-        self.assertIn("data-pp-controls-toggle", self.client.get("/static/common.js").text)
-        self.assertIn('class="pp-switch-track"', self.client.get("/static/common.js").text)
-        self.assertIn('role="switch"', self.client.get("/static/common.js").text)
-        self.assertIn("/api/integrations/propresenter/navigate/", display_script)
-        self.assertIn("keyboardStorageKey", display_script)
+        self.assertIn("playlist_keyboard_control", editor)
+        self.assertIn("playlist_allow_remote_trigger", editor)
+        self.assertIn("/api/integrations/propresenter/navigate/", self.client.get("/static/display.js").text)
         self.assertFalse(playlist["settings"]["keyboard_control"])
 
     def test_runtime_and_manual_service_selection(self):

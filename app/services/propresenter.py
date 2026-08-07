@@ -645,11 +645,14 @@ class ProPresenterClient:
         if not sequence_ids:
             return cls._cue_entries(raw)
 
+        referenced = set(sequence_ids)
+        first_arranged = next((index for index, group in enumerate(groups) if identifier(group) in referenced), 0)
         entries: list[dict[str, Any]] = []
-        # ProPresenter's thumbnail and presentation-index routes address the
-        # active arrangement itself. Library groups that are not referenced by
-        # that arrangement must not be inserted ahead of it, or every thumbnail
-        # and active-cue marker after that point is shifted.
+        # Thumbnail indexes include leading media/background cues even though
+        # presentation_index and the active arrangement do not.
+        for group in groups[:first_arranged]:
+            if isinstance(group, dict):
+                entries.extend(cls._cue_entries(group))
         for group_id in sequence_ids:
             entries.extend(cls._cue_entries(group_map[group_id]))
         return entries
@@ -797,10 +800,8 @@ class ProPresenterClient:
             raise ValueError("Invalid ProPresenter presentation or slide index")
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
         async with httpx.AsyncClient(timeout=5) as client:
-            # Presentation state and trigger routes use zero-based cue indexes,
-            # while ProPresenter's thumbnail route uses one-based cue numbers.
             response = await client.get(
-                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/thumbnail/{index + 1}",
+                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/thumbnail/{index}",
                 params={"quality": 960, "thumbnail_type": "jpeg"},
                 headers={"Accept": "image/jpeg"},
             )
