@@ -88,7 +88,7 @@ Open `http://127.0.0.1:8040/admin`, turn off demonstration data, and configure P
 
 ![ChurchBoard integrations setup](docs/screenshots/setup.jpg)
 
-Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Planning Center setup](docs/PLANNING_CENTER.md), [ProPresenter setup](docs/PROPRESENTER.md), [Open Sound Meter setup](docs/OPEN_SOUND_METER.md), and [Restream setup](docs/RESTREAM.md) guides. To control ShowXpress-compatible lighting software, enable its External App and External Control settings, configure the matching address, port (normally 7348), and password in Setup, then add a Lighting controls widget to a dashboard. Only pages marked visible to external applications appear in ChurchBoard.
+Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Planning Center setup](docs/PLANNING_CENTER.md), [ProPresenter setup](docs/PROPRESENTER.md), [Open Sound Meter setup](docs/OPEN_SOUND_METER.md), and [Restream setup](docs/RESTREAM.md) guides. To control ShowXpress-compatible lighting software, enable its External App setting, **restart the lighting application**, enable External Control with a password, then configure the matching address and port (normally 7348) in Setup. Only pages marked visible to external applications appear in ChurchBoard.
 
 ## Dashboard editing
 

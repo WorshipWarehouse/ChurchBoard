@@ -123,7 +123,21 @@ A Scheduled Positions & Mics widget uses a one-color ChurchBoard mark for an una
 
 The title is configurable per widget, so different dashboards can use different plan-media icons. ChurchBoard matches the title without regard to capitalization.
 
-## 10. Connect Open Sound Meter
+## 10. Connect ShowXpress and TLC lighting control
+
+ChurchBoard controls the exposed Live buttons in Chauvet ShowXpress, Showtec QuickDMX, Sweetlight Controller, and other applications based on TheLightingController.
+
+1. In the lighting app, enable **Main menu → Preferences → Network → External App**.
+2. Completely quit and restart the lighting app. This step is required before it starts responding to External App connections.
+3. Open the **Live** tab and choose **Live Settings → External Control**. Enable external control and set a password.
+4. Mark every Live page that ChurchBoard should control **Visible in external application**.
+5. In ChurchBoard Setup, enable **ShowXpress / TLC lighting control** and enter the lighting computer's LAN address, External App port (normally `7348`), and the same password.
+6. Choose **Save & load lighting buttons**. The confirmation lists the number of buttons exposed by the lighting app.
+7. Add a **Lighting controls** widget to a trusted operator dashboard.
+
+If ChurchBoard times out waiting for the sign-in reply, confirm the lighting app was restarted after enabling External App, both External App and External Control remain enabled, and ChurchBoard is using the lighting computer's LAN address rather than a browser or router address.
+
+## 11. Connect Open Sound Meter
 
 ChurchBoard can receive calibrated level data directly from [Open Sound Meter](https://opensoundmeter.com/) instead of measuring through the dashboard browser.
 
@@ -137,7 +151,7 @@ ChurchBoard can receive calibrated level data directly from [Open Sound Meter](h
 
 ChurchBoard displays Open Sound Meter's selected level after applying the same SPL reference used by Open Sound Meter. It does not calibrate, smooth, or synthesize the measurement. See the complete [Open Sound Meter setup and data notes](OPEN_SOUND_METER.md) and [legal and operational limitations](../LEGAL.md).
 
-## 11. Connect Restream
+## 12. Connect Restream
 
 Restream monitoring shows whether a broadcast is live or upcoming, its elapsed time and available viewer count, and the state of each configured destination.
 
@@ -150,7 +164,7 @@ Restream monitoring shows whether a broadcast is live or upcoming, its elapsed t
 
 ChurchBoard stores the client secret and OAuth tokens only in its local settings. Encoder bitrate and health are not exposed by the Restream public API, so ChurchBoard labels those values unavailable instead of estimating them. See [Restream setup](RESTREAM.md).
 
-## 12. Connect OBS Studio
+## 13. Connect OBS Studio
 
 ChurchBoard can monitor OBS Studio through its built-in WebSocket server without requiring Studio Mode.
 
@@ -162,7 +176,7 @@ ChurchBoard can monitor OBS Studio through its built-in WebSocket server without
 
 The widget reports connection, streaming and recording state, elapsed time, output bitrate/statistics, dropped frames, and the configured preview. Keep OBS and ChurchBoard on the same trusted production network and do not expose the WebSocket port to the internet.
 
-## 13. Open displays
+## 14. Open displays
 
 Each dashboard has its own **Background color** picker at the top of the editor. The dashboard background, translucent liquid-glass widget surfaces, reflections, borders, and interface accents follow that color. Operational mic and SPL states remain green, yellow, or red so warnings are still immediately recognizable.
 
