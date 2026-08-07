@@ -415,8 +415,8 @@ def require_lighting_widget_control(request: Request, dashboard_slug: str | None
     data = store_from(request).load()
     dashboard = next((item for item in data.get("dashboards", []) if str(item.get("slug") or "") == str(dashboard_slug or "")), None)
     widget = next((item for item in (dashboard or {}).get("widgets", []) if str(item.get("id") or "") == str(widget_id or "")), None)
-    if not widget or widget.get("type") != "lighting" or widget.get("settings", {}).get("allow_remote_trigger") is False:
-        raise HTTPException(403, "Lighting triggering is disabled in this widget's settings")
+    if not widget or widget.get("type") != "lighting":
+        raise HTTPException(403, "Lighting controls must be triggered from a Lighting controls widget")
     return data["settings"].get("lighting", {})
 
 
