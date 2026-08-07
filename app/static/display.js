@@ -117,6 +117,7 @@ function leaderMicKey(mics){return(mics||[]).map(mic=>[mic.id,mic.name,mic.recei
 function widgetStateKey(widget,state){
   const timing=state.timing||{},service=state.service||{},pp=state.propresenter||{},settings=widget.settings||{};
   if(widget.type==="clock"||widget.type==="spl"||widget.type==="text")return`${widget.type}:static`;
+  if(widget.type==="lighting")return`lighting:${JSON.stringify([settings.page_size,settings.scene_size])}`;
   if(widget.type==="service")return`service:${objectId(service)}:${timing.source||""}:${timing.state||""}`;
   if(widget.type==="timing")return`timing:${String(timing.current_item?.id||"")}:${timing.rehearsal===true}`;
   if(["assignments","mics"].includes(widget.type))return`${widget.type}:${JSON.stringify([state.people||[],state.mics||[],state.planning_center_media||{}])}`;
