@@ -37,8 +37,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn('id="cancel-dashboard" type="button"', admin.text)
         admin_script = self.client.get("/static/admin.js").text
         self.assertIn('dialog.close("cancel")', admin_script)
-        self.assertIn('sf.elements.namedItem("pp_remote_control_enabled")', admin_script)
-        self.assertNotIn("sf.pp_remote_control_enabled", admin_script)
+        self.assertNotIn("pp_remote_control_enabled", admin_script)
         display = self.client.get("/display/main")
         self.assertEqual(display.status_code, 200)
         self.assertIn('class="menu-brand"', display.text)
@@ -52,7 +51,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn('id="delete-dashboard"', editor.text)
         self.assertIn('input name="show_title" type="checkbox"', editor.text)
         self.assertIn('select name="slide_layout"', editor.text)
-        self.assertIn('name="pp_remote_control_enabled"', admin.text)
+        self.assertNotIn('name="pp_remote_control_enabled"', admin.text)
         self.assertIn('ProPresenter playlist', self.client.get("/static/common.js").text)
         self.assertIn('input name="show_parts" type="checkbox"', editor.text)
         self.assertNotIn('id="dashboard-theme"', editor.text)
@@ -125,6 +124,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("playlist_marker_size", editor)
         self.assertIn("playlist_active_border_color", editor)
         self.assertIn("playlist_keyboard_control", editor)
+        self.assertIn("playlist_allow_remote_trigger", editor)
         self.assertIn("/api/integrations/propresenter/navigate/", self.client.get("/static/display.js").text)
         self.assertFalse(playlist["settings"]["keyboard_control"])
 
@@ -160,6 +160,8 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         response = self.client.post("/api/integrations/propresenter/navigate/next")
         self.assertEqual(response.status_code, 403)
+        response = self.client.post("/api/integrations/propresenter/navigate/next", json={"dashboard_slug": "main", "widget_id": "playlist"})
+        self.assertEqual(response.status_code, 400)
 
     def test_propresenter_playlist_diagnostics_requires_connection(self):
         response = self.client.get("/api/integrations/propresenter/playlist-diagnostics")

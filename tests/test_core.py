@@ -832,6 +832,14 @@ class ProPresenterTests(unittest.TestCase):
         self.assertEqual(context["service_item_index"], 2)
         self.assertEqual(context["playlist_name"], "August 2, 2026")
 
+    def test_playlist_context_uses_valid_linked_index_when_item_index_is_sentinel(self):
+        context = ProPresenterClient._playlist_context({"presentation": {
+            "playlist": {"uuid": "playlist-1", "name": "August 9, 2026"},
+            "item": {"name": "John 1_1-3 (ASB)", "index": 4294967295},
+            "playlist_item": {"id": {"name": "John 1_1-3 (ASB)", "index": 8}, "is_pco": True},
+        }})
+        self.assertEqual(context["service_item_index"], 8)
+
     def test_pco_playlist_index_beats_different_local_presentation_name(self):
         items = [
             {"id": "1", "title": "Great I Am", "item_type": "song"},
@@ -882,6 +890,31 @@ class ProPresenterTests(unittest.TestCase):
             is_pco_item=True,
         )
         self.assertEqual(match["id"], "2")
+
+    def test_absolute_synced_playlist_index_matches_message_with_headers(self):
+        items = [
+            {"id": "pre", "title": "Pre-Service", "item_type": "header"},
+            {"id": "slides", "title": "Pre-Service Slides", "item_type": "item"},
+            {"id": "countdown", "title": "Countdown", "item_type": "item"},
+            {"id": "service", "title": "Service", "item_type": "header"},
+            {"id": "lord", "title": "Lord I Lift Your Name On High", "item_type": "song"},
+            {"id": "fire", "title": "Another In The Fire", "item_type": "song"},
+            {"id": "grace", "title": "Good Grace", "item_type": "song"},
+            {"id": "welcome", "title": "Welcome / Host Moment", "item_type": "item"},
+            {"id": "message", "title": "Message", "item_type": "item"},
+            {"id": "center", "title": "Center", "item_type": "item"},
+        ]
+        match = RuntimeService._match_presentation_item(
+            "John 1_1-3 (ASB)",
+            items,
+            "welcome",
+            {"songs_only": True, "match_mode": "exact"},
+            service_item_title="John 1_1-3 (ASB)",
+            service_item_index=8,
+            service_item_index_is_absolute=True,
+            is_pco_item=True,
+        )
+        self.assertEqual(match["id"], "message")
 
     def test_pco_playlist_index_ignores_headers_and_pre_service_rows(self):
         items = [
@@ -1095,6 +1128,53 @@ class ProPresenterPollingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["service_item_index"], 3)
         self.assertTrue(status["service_item_is_pco"])
         self.assertEqual(status["playlist_name"], "Sunday")
+
+    async def test_focused_synced_playlist_row_marks_message_index_as_absolute(self):
+        class FakeResponse:
+            def __init__(self, payload):
+                self.payload = payload
+                self.status_code = 200
+                self.is_success = True
+
+            def json(self):
+                return self.payload
+
+            def raise_for_status(self):
+                return None
+
+        class FakeHttp:
+            async def get(self, url):
+                if url.endswith("/v1/status/slide"):
+                    return FakeResponse({"current": {"text": "In the beginning"}, "next": {"text": "The Word was with God"}})
+                if url.endswith("/v1/presentation/slide_index"):
+                    return FakeResponse(0)
+                if url.endswith("/v1/presentation/active"):
+                    return FakeResponse({"presentation": {"id": {"uuid": "MESSAGE-PRES", "name": "John 1_1-3 (ASB)"}}})
+                if url.endswith("/v1/playlist/active"):
+                    return FakeResponse({"presentation": {"playlist": None, "item": None, "playlist_item": None}})
+                if url.endswith("/v1/playlist/focused"):
+                    return FakeResponse({"presentation": {
+                        "playlist": {"uuid": "PLAN", "name": "August 9, 2026", "index": 2},
+                        "item": {"name": "John 1_1-3 (ASB)", "index": 4294967295},
+                        "playlist_item": {"id": {"name": "John 1_1-3 (ASB)", "index": 8}, "is_pco": True},
+                    }})
+                if url.endswith("/v1/playlist/PLAN"):
+                    return FakeResponse({"items": [
+                        {"type": "presentation", "name": "Lord I Lift Your Name On High", "index": 4, "is_pco": True, "presentation_info": {"presentation_uuid": "LORD-PRES"}},
+                        {"type": "presentation", "name": "John 1_1-3 (ASB)", "index": 8, "is_pco": True, "presentation_info": {"presentation_uuid": "MESSAGE-PRES"}},
+                    ]})
+                if url.endswith("/v1/presentation/MESSAGE-PRES"):
+                    return FakeResponse({"id": {"uuid": "MESSAGE-PRES", "name": "John 1_1-3 (ASB)"}, "groups": [{"name": "Message", "slides": [{"text": "In the beginning"}]}]})
+                if url.endswith("/v1/presentation/LORD-PRES"):
+                    return FakeResponse({"id": {"uuid": "LORD-PRES", "name": "Lord I Lift Your Name On High"}, "groups": []})
+                return FakeResponse({})
+
+        client = ProPresenterClient({"enabled": True, "host": "127.0.0.1", "port": 53528})
+        client._client = FakeHttp()
+        status = await client.status()
+        self.assertEqual(status["service_item_index"], 8)
+        self.assertTrue(status["service_item_index_is_absolute"])
+        self.assertTrue(status["service_item_is_pco"])
 
     async def test_active_presentation_arrangement_is_not_replaced_by_library_details(self):
         class FakeResponse:

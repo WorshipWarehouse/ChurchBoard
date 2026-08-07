@@ -197,6 +197,24 @@ class ProPresenterClient:
             }
         else:
             playlist_context = browser_playlist_context
+        playlist_presentations = self._playlist_presentations(self._playlist_items_payload, playlist_context)
+        linked_playlist_row = next(
+            (
+                row for row in playlist_presentations
+                if presentation_uuid
+                and row.get("presentation_uuid") == presentation_uuid
+                and row.get("is_pco")
+            ),
+            None,
+        )
+        if linked_playlist_row:
+            # A Planning Center-synced presentation can keep a local filename
+            # (for example John 1_1-3) while its playlist row is linked to the
+            # Planning Center Message item. The row index includes headers and
+            # pre-service items, so preserve that absolute index explicitly.
+            playlist_context["service_item_index"] = linked_playlist_row["index"]
+            playlist_context["service_item_index_is_absolute"] = True
+            playlist_context["service_item_is_pco"] = True
         if clock - self._transport_refreshed >= 0.5:
             transport_responses = await asyncio.gather(
                 self._http().get(f"{base}/v1/transport/presentation/current"),
@@ -239,7 +257,6 @@ class ProPresenterClient:
             if next_result["image_uuid"] or next_details else "",
             "timer_text": self._countdown_text(next_result.get("text")),
         })
-        playlist_presentations = self._playlist_presentations(self._playlist_items_payload, playlist_context)
         for item in playlist_presentations:
             item_uuid = item.get("presentation_uuid") or ""
             item_details = self._playlist_presentation_details.get(item_uuid) or {}
@@ -427,13 +444,15 @@ class ProPresenterClient:
         item = destination.get("item") if isinstance(destination.get("item"), dict) else {}
         playlist_item = destination.get("playlist_item") if isinstance(destination.get("playlist_item"), dict) else {}
         identifier = playlist_item.get("id") if isinstance(playlist_item.get("id"), dict) else {}
-        raw_index = item.get("index", identifier.get("index"))
-        try:
-            index = int(raw_index)
-            if index < 0 or index >= 2**31:
-                index = None
-        except (TypeError, ValueError):
-            index = None
+        index = None
+        for raw_index in (item.get("index"), identifier.get("index")):
+            try:
+                candidate = int(raw_index)
+                if 0 <= candidate < 2**31:
+                    index = candidate
+                    break
+            except (TypeError, ValueError):
+                continue
         playlist_identifier = playlist.get("id") if isinstance(playlist.get("id"), dict) else playlist
         return {
             "service_item_title": str(item.get("name") or identifier.get("name") or "").strip(),
