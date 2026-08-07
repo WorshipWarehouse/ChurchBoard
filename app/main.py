@@ -406,7 +406,8 @@ async def lighting_buttons(request: Request) -> dict:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(502, f"Could not read lighting controls: {exc}") from exc
+        detail = str(exc) or exc.__class__.__name__
+        raise HTTPException(502, f"Could not read lighting controls: {detail}") from exc
     return {"connected": True, "items": buttons, "count": len(buttons)}
 
 
@@ -430,7 +431,8 @@ async def lighting_trigger_button(payload: LightingButtonTrigger, request: Reque
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(502, f"Could not trigger lighting button: {exc}") from exc
+        detail = str(exc) or exc.__class__.__name__
+        raise HTTPException(502, f"Could not trigger lighting button: {detail}") from exc
     return {"ok": True, "name": payload.name, "mode": payload.mode}
 
 

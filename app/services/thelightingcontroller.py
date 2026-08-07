@@ -20,7 +20,7 @@ class TheLightingControllerClient:
         try:
             await self._send(writer, "BUTTON_LIST")
             while True:
-                line = await asyncio.wait_for(reader.readline(), timeout=3)
+                line = await self._read_line(reader, "the exposed button list")
                 if not line:
                     raise ConnectionError("The lighting controller closed the connection")
                 text = line.decode("utf-8", "replace").rstrip("\r\n")
@@ -53,11 +53,22 @@ class TheLightingControllerClient:
 
     async def _connect(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         host = str(self.settings.get("host") or "").strip()
-        port = int(self.settings.get("port") or 7348)
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=3)
+        try:
+            port = int(self.settings.get("port") or 7348)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Enter a valid External App port number") from exc
+        if not 1 <= port <= 65535:
+            raise ValueError("External App port must be between 1 and 65535")
+        try:
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=3)
+        except asyncio.TimeoutError as exc:
+            raise ConnectionError(f"Timed out connecting to {host}:{port}. Verify the computer address, port, and firewall.") from exc
+        except OSError as exc:
+            detail = exc.strerror or str(exc) or exc.__class__.__name__
+            raise ConnectionError(f"Could not connect to {host}:{port}: {detail}") from exc
         await self._send(writer, "HELLO", "churchboard", str(self.settings.get("password") or ""))
         while True:
-            line = await asyncio.wait_for(reader.readline(), timeout=3)
+            line = await self._read_line(reader, "the ShowXpress/TLC sign-in reply")
             if not line:
                 writer.close()
                 await writer.wait_closed()
@@ -69,6 +80,13 @@ class TheLightingControllerClient:
                 writer.close()
                 await writer.wait_closed()
                 raise ValueError(text.split("|", 1)[1] or "The lighting controller rejected the password")
+
+    @staticmethod
+    async def _read_line(reader: asyncio.StreamReader, waiting_for: str) -> bytes:
+        try:
+            return await asyncio.wait_for(reader.readline(), timeout=3)
+        except asyncio.TimeoutError as exc:
+            raise ConnectionError(f"Timed out waiting for {waiting_for}. Check that External App and External Control are enabled.") from exc
 
     @staticmethod
     async def _send(writer: asyncio.StreamWriter, *parts: str) -> None:
