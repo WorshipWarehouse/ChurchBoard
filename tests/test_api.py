@@ -32,8 +32,13 @@ class ApiTests(unittest.TestCase):
         self.assertIn("churchboard-icon.png", admin.text)
         self.assertIn('select name="timezone"', admin.text)
         self.assertNotIn('input name="timezone"', admin.text)
+        for obs_field in ("obs_enabled", "obs_host", "obs_port", "obs_password", "obs_dropped_frames_threshold", "obs_preview_url"):
+            self.assertIn(f'name="{obs_field}"', admin.text)
         self.assertIn('id="cancel-dashboard" type="button"', admin.text)
-        self.assertIn('dialog.close("cancel")', self.client.get("/static/admin.js").text)
+        admin_script = self.client.get("/static/admin.js").text
+        self.assertIn('dialog.close("cancel")', admin_script)
+        self.assertIn('sf.elements.namedItem("pp_remote_control_enabled")', admin_script)
+        self.assertNotIn("sf.pp_remote_control_enabled", admin_script)
         display = self.client.get("/display/main")
         self.assertEqual(display.status_code, 200)
         self.assertIn('class="menu-brand"', display.text)
