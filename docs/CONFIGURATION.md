@@ -150,7 +150,19 @@ Restream monitoring shows whether a broadcast is live or upcoming, its elapsed t
 
 ChurchBoard stores the client secret and OAuth tokens only in its local settings. Encoder bitrate and health are not exposed by the Restream public API, so ChurchBoard labels those values unavailable instead of estimating them. See [Restream setup](RESTREAM.md).
 
-## 12. Open displays
+## 12. Connect OBS Studio
+
+ChurchBoard can monitor OBS Studio through its built-in WebSocket server without requiring Studio Mode.
+
+1. In OBS, open **Tools → WebSocket Server Settings**.
+2. Enable the WebSocket server, set a strong password, and note the port (normally `4455`).
+3. In ChurchBoard Setup, enable **OBS Studio monitoring** and enter the OBS computer's LAN address, port, and password.
+4. Set the dropped-frame warning threshold. Optionally provide a browser-readable preview-image URL if another tool publishes one; OBS WebSocket itself does not provide a live preview image.
+5. Save, then add an **OBS Studio** widget to an operator dashboard.
+
+The widget reports connection, streaming and recording state, elapsed time, output bitrate/statistics, dropped frames, and the configured preview. Keep OBS and ChurchBoard on the same trusted production network and do not expose the WebSocket port to the internet.
+
+## 13. Open displays
 
 Each dashboard has its own **Background color** picker at the top of the editor. The dashboard background, translucent liquid-glass widget surfaces, reflections, borders, and interface accents follow that color. Operational mic and SPL states remain green, yellow, or red so warnings are still immediately recognizable.
 

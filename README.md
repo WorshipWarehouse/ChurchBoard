@@ -6,7 +6,7 @@
 
 <h1 align="center">ChurchBoard</h1>
 
-ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, Shure QLX-D/ULX-D and Sennheiser EW-DX microphone telemetry, Open Sound Meter levels, and Restream broadcast status in configurable displays for the stage, green room, audio booth, and production team.
+ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, Shure QLX-D/ULX-D/SLX-D and Sennheiser EW-DX microphone telemetry, Open Sound Meter levels, OBS Studio health, and Restream broadcast status in configurable displays for the stage, green room, audio booth, and production team.
 
 ## Watch the setup and demo video
 
@@ -21,12 +21,15 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 - Shure QLX-D/ULX-D/SLX-D and Sennheiser EW-DX battery, RF/audio, transmitter, mute, warning, and online/offline status
 - Current and next ProPresenter slides as text or slide images, with live countdown overlays and video playback progress
 - A scrollable ProPresenter playlist that shows every playlist item, placeholder, presentation, section marker, and slide thumbnail; trusted operators can trigger a presentation or individual slide from ChurchBoard
+- Optional live-board slide controls and keyboard control for ProPresenter, with corrected current-slide thumbnails and Planning Center-linked item matching
+- A read-only ProPresenter timers widget showing each timer's current value and state
 - ProPresenter item title, part labels and colors, slide number, and notes
 - Compact, complete scrollable, or fit-to-board Planning Center orders of service—including pre-service and post-service sections—with durations, estimated clock times, leaders, and mapped microphones
 - Current item and overall service timing
 - Team-member lists with photos, filtered by team and position
 - Direct Open Sound Meter monitoring with selectable weighting/response and downloadable service graphs and per-item averages
 - Restream broadcast, viewer, and destination-status monitoring through OAuth
+- OBS Studio streaming/recording state, connection health, output statistics, dropped-frame warnings, and an optional preview image
 - Planning Center Services LIVE control buttons
 - A WYSIWYG dashboard editor with independent layouts and color-matched liquid-glass widgets for each destination
 
@@ -39,17 +42,25 @@ Choose your computer and click its download link:
 
 | Your computer | Download |
 | --- | --- |
-| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Windows-x64-Setup.exe)** |
-| **Mac with Apple silicon** — M1 or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-macOS-arm64.dmg)** |
-| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-macOS-x86_64.dmg)** |
-| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Linux-amd64.deb)** |
-| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Linux-x86_64.tar.gz)** |
+| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Windows-x64-Setup.exe)** |
+| **Mac with Apple silicon** — M1 or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-macOS-arm64.dmg)** |
+| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-macOS-x86_64.dmg)** |
+| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Linux-amd64.deb)** |
+| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.2-Linux-x86_64.tar.gz)** |
 
 Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it says **Chip**, use Apple silicon. If it says **Processor**, use Intel.
 
 **Raspberry Pi:** jump to the [one-command Raspberry Pi installer](#raspberry-pi).
 
-[View all v1.3.1 downloads and release notes](https://github.com/WorshipWarehouse/ChurchBoard/releases/tag/v1.3.1)
+[View all v1.3.2 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v1.3.2)
+
+### What's new in 1.3.2
+
+- Control ProPresenter from its live Playlist widget with optional clickable slides and browser-local arrow-key/spacebar control.
+- Match Planning Center-linked non-song items such as `Message` even when the ProPresenter presentation has a different name.
+- Keep the current and next ProPresenter thumbnails aligned with the cues actually on air.
+- Monitor Shure SLX-D receivers, OBS Studio status, and all configured ProPresenter timers.
+- Cancel or delete dashboards safely, and fit dashboard/timing content more reliably at smaller display sizes.
 
 ## Install
 
@@ -62,13 +73,13 @@ On macOS, the supplied old-school wooden board icon stays in the menu bar. On Wi
 For Raspberry Pi OS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/WorshipWarehouse/ChurchBoard/main/installers/raspberry-pi/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/wtapper89/ChurchBoard/main/installers/raspberry-pi/install.sh | bash
 ```
 
 Add `--kiosk` to open the Main dashboard fullscreen after desktop login:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/WorshipWarehouse/ChurchBoard/main/installers/raspberry-pi/install.sh | bash -s -- --kiosk
+curl -fsSL https://raw.githubusercontent.com/wtapper89/ChurchBoard/main/installers/raspberry-pi/install.sh | bash -s -- --kiosk
 ```
 
 See [Installation](docs/INSTALLATION.md) for detailed steps, updates, automatic-start behavior, and uninstall instructions.
@@ -91,7 +102,7 @@ Each dashboard has a stable URL. Add widgets from the palette, drag and resize t
 
 ChurchBoard's visual microphone-monitoring direction was inspired by [Micboard](https://micboard.io/) by Karl Swanson, an independent MIT-licensed project for network-enabled Shure devices. The initial cross-platform dashboard concept also drew inspiration from [NewsTalentMonitorPlus](https://github.com/wtapper89/NewsTalentMonitorPlus). ChurchBoard is a separate implementation and does not bundle either project's code or assets.
 
-Special thanks to [Caleb Hines (@WorshipWarehouse)](https://github.com/WorshipWarehouse) for the ChurchBoard 1.3 integration and dashboard contributions, including Open Sound Meter, Restream, scheduled-person consolidation, complete service-order display modes, and Sennheiser EW-DX monitoring. The original commits and authorship are preserved in the project history. See [Contributors](CONTRIBUTORS.md).
+Special thanks to [Caleb Hines (@WorshipWarehouse)](https://github.com/WorshipWarehouse) for the ChurchBoard 1.3 integration and dashboard contributions, including Open Sound Meter, Restream, OBS Studio, scheduled-person consolidation, complete service-order display modes, Sennheiser EW-DX and Shure SLX-D monitoring, ProPresenter playlist control and timers, dashboard lifecycle controls, and responsive fullscreen improvements. The original commits and authorship are preserved in the project history. See [Contributors](CONTRIBUTORS.md).
 
 The people shown in demonstration mode and documentation are AI-generated fictional samples, not real team members. ChurchBoard is independently developed and is not affiliated with or endorsed by Planning Center, Shure, Renewed Vision/ProPresenter, Micboard, Apple, Microsoft, or Raspberry Pi.
 
