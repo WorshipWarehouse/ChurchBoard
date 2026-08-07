@@ -54,6 +54,12 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn('name="pp_remote_control_enabled"', admin.text)
         self.assertIn('ProPresenter playlist', self.client.get("/static/common.js").text)
         self.assertIn('input name="show_parts" type="checkbox"', editor.text)
+        self.assertIn('integration-palette.css', editor.text)
+        editor_script = self.client.get("/static/editor.js").text
+        self.assertIn('name:"Planning Center"', editor_script)
+        self.assertIn('name:"ProPresenter"', editor_script)
+        self.assertIn('className="integration-group"', editor_script)
+        self.assertEqual(self.client.get("/static/integration-palette.css").status_code, 200)
         self.assertNotIn('id="dashboard-theme"', editor.text)
         self.assertNotIn('target="_blank"', editor.text)
         display_script = self.client.get("/static/display.js").text
