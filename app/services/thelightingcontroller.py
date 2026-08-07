@@ -46,11 +46,17 @@ class TheLightingControllerClient:
         button = next((item for item in buttons if item["name"] == name), None)
         if button is None:
             raise ValueError("That lighting button is no longer exposed by the controller")
-        command = "BUTTON_PRESS" if mode == "press" or (mode == "toggle" and not button["pressed"]) else "BUTTON_RELEASE"
         reader, writer = await self._connect()
         del reader
         try:
-            await self._send(writer, command, name)
+            if mode == "toggle" and button["flash"]:
+                # Flash buttons are momentary scenes; a click must not leave
+                # one held down after ChurchBoard's request finishes.
+                await self._send(writer, "BUTTON_PRESS", name)
+                await self._send(writer, "BUTTON_RELEASE", name)
+            else:
+                command = "BUTTON_PRESS" if mode == "press" or (mode == "toggle" and not button["pressed"]) else "BUTTON_RELEASE"
+                await self._send(writer, command, name)
         finally:
             writer.close()
             await writer.wait_closed()
