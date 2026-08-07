@@ -14,10 +14,17 @@ from app.services.sennheiser import parse_ssc_response, ssc_request
 from app.services.propresenter import ProPresenterClient
 from app.services.restream import RestreamClient
 from app.services.runtime import RuntimeService
+from app.services.thelightingcontroller import TheLightingControllerClient
 from app.store import ConfigStore
 
 
 class StoreTests(unittest.TestCase):
+    def test_lighting_zero_based_button_positions_are_converted_for_css_grid(self):
+        buttons = TheLightingControllerClient._parse_buttons(
+            '<buttons><page name="Live" columns="3"><button column="0" line="0">Scene 1</button><button column="1" line="0">Scene 2</button></page></buttons>'
+        )
+        self.assertEqual([(button["name"], button["column"], button["line"]) for button in buttons], [("Scene 1", 1, 1), ("Scene 2", 2, 1)])
+
     def test_new_store_contains_destination_dashboards(self):
         with tempfile.TemporaryDirectory() as directory:
             store = ConfigStore(Path(directory) / "state.json")

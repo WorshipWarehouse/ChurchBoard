@@ -116,13 +116,26 @@ class TheLightingControllerClient:
         for page in root.findall("page"):
             page_name = page.get("name") or "Lighting"
             page_columns = int(page.get("columns") or 0)
-            for element in page.findall("button"):
+            page_buttons = list(page.findall("button"))
+            # TLC's external-app XML uses zero-based positions on some
+            # releases, whereas CSS grid lines are one-based.  Treat a zero
+            # in either coordinate as an unambiguous zero-based page so two
+            # adjacent TLC buttons cannot be rendered on top of each other.
+            zero_based = any(
+                element.get(axis) == "0"
+                for element in page_buttons
+                for axis in ("column", "line")
+            )
+            coordinate_offset = 1 if zero_based else 0
+            for element in page_buttons:
                 name = (element.text or "").strip()
                 if not name:
                     continue
                 buttons.append({
-                    "name": name, "page": page_name, "page_columns": page_columns, "column": int(element.get("column") or 0),
-                    "line": int(element.get("line") or 0), "color": element.get("color") or "#4c6b8a",
+                    "name": name, "page": page_name, "page_columns": page_columns,
+                    "column": int(element.get("column") or 0) + coordinate_offset,
+                    "line": int(element.get("line") or 0) + coordinate_offset,
+                    "color": element.get("color") or "#4c6b8a",
                     "pressed": element.get("pressed") == "1", "flash": element.get("flash") == "1",
                 })
         return sorted(buttons, key=lambda item: (item["page"].casefold(), item["line"], item["column"], item["name"].casefold()))
