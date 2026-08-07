@@ -112,12 +112,13 @@ class TheLightingControllerClient:
         buttons: list[dict[str, Any]] = []
         for page in root.findall("page"):
             page_name = page.get("name") or "Lighting"
+            page_columns = int(page.get("columns") or 0)
             for element in page.findall("button"):
                 name = (element.text or "").strip()
                 if not name:
                     continue
                 buttons.append({
-                    "name": name, "page": page_name, "column": int(element.get("column") or 0),
+                    "name": name, "page": page_name, "page_columns": page_columns, "column": int(element.get("column") or 0),
                     "line": int(element.get("line") or 0), "color": element.get("color") or "#4c6b8a",
                     "pressed": element.get("pressed") == "1", "flash": element.get("flash") == "1",
                 })
