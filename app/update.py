@@ -13,7 +13,7 @@ import httpx
 from app.version import __version__
 
 
-REPOSITORY = "wtapper89/ChurchBoard"
+REPOSITORY = "WorshipWarehouse/ChurchBoard"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
 RELEASES_URL = f"https://github.com/{REPOSITORY}/releases/latest"
 

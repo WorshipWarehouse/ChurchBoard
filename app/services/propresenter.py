@@ -15,7 +15,14 @@ class ProPresenterClient:
         self._client: httpx.AsyncClient | None = None
         self._active_payload: dict[str, Any] = {}
         self._playlist_payload: dict[str, Any] = {}
+        self._playlist_items_payload: Any = []
         self._transport_payload: dict[str, Any] = {}
+        self._presentation_details_payload: dict[str, Any] = {}
+        self._presentation_details_uuid = ""
+        self._presentation_details_refreshed = 0.0
+        self._playlist_presentation_details: dict[str, dict[str, Any]] = {}
+        self._playlist_details_key: tuple[str, ...] = ()
+        self._playlist_details_refreshed = 0.0
         self._active_refreshed = 0.0
         self._playlist_refreshed = 0.0
         self._transport_refreshed = 0.0
@@ -34,6 +41,28 @@ class ProPresenterClient:
             await self._client.aclose()
             self._client = None
 
+    async def playlist_diagnostics(self) -> dict[str, Any]:
+        """Return the raw, read-only playlist responses for local debugging."""
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        paths = {"active": "/v1/playlist/active", "focused": "/v1/playlist/focused"}
+        results: dict[str, Any] = {}
+        for name, path in paths.items():
+            response = await self._http().get(f"{base}{path}")
+            try:
+                body: Any = response.json()
+            except Exception:
+                body = response.text
+            results[name] = {"status": response.status_code, "body": body}
+        playlist_uuid = next((self._playlist_context(row["body"]).get("playlist_uuid") for row in results.values() if isinstance(row.get("body"), dict) and self._playlist_context(row["body"]).get("playlist_uuid")), "")
+        if playlist_uuid:
+            response = await self._http().get(f"{base}/v1/playlist/{quote(playlist_uuid, safe='')}")
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            results["contents"] = {"status": response.status_code, "body": body}
+        return results
+
     async def status(self) -> dict[str, Any]:
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
         clock = time.monotonic()
@@ -50,6 +79,8 @@ class ProPresenterClient:
         if fetch_playlist:
             names.append("playlist")
             requests.append(self._http().get(f"{base}/v1/playlist/active"))
+            names.append("playlist_focused")
+            requests.append(self._http().get(f"{base}/v1/playlist/focused"))
         responses = dict(zip(names, await asyncio.gather(*requests)))
         responses["slide"].raise_for_status()
         slide = responses["slide"].json()
@@ -61,14 +92,66 @@ class ProPresenterClient:
             self._active_refreshed = clock
         playlist_response = responses.get("playlist")
         if playlist_response is not None and playlist_response.is_success:
-            self._playlist_payload = playlist_response.json()
+            active_playlist = playlist_response.json()
+            focused_response = responses.get("playlist_focused")
+            focused_playlist = focused_response.json() if focused_response is not None and focused_response.is_success else {}
+            # A presentation can be active without its playlist being focused.
+            # For the operator browser, the focused playlist is the complete
+            # ProPresenter list the operator is currently working from.
+            self._playlist_payload = focused_playlist if self._playlist_context(focused_playlist).get("playlist_uuid") else active_playlist
+            self._playlist_items_payload = self._playlist_payload
             self._playlist_refreshed = clock
+            playlist_uuid = self._playlist_context(self._playlist_payload).get("playlist_uuid")
+            if playlist_uuid:
+                detail_response = await self._http().get(f"{base}/v1/playlist/{quote(playlist_uuid, safe='')}")
+                if detail_response.is_success:
+                    self._playlist_items_payload = detail_response.json()
+            playlist_rows = self._playlist_presentations(
+                self._playlist_items_payload, self._playlist_context(self._playlist_payload)
+            )
+            presentation_uuids = tuple(
+                row["presentation_uuid"] for row in playlist_rows
+                if row.get("triggerable") and re.fullmatch(r"[A-Za-z0-9-]+", row.get("presentation_uuid") or "")
+            )
+            if presentation_uuids and (
+                presentation_uuids != self._playlist_details_key
+                or clock - self._playlist_details_refreshed >= 5.0
+            ):
+                detail_responses = await asyncio.gather(*[
+                    self._http().get(f"{base}/v1/presentation/{quote(uuid, safe='')}")
+                    for uuid in presentation_uuids
+                ], return_exceptions=True)
+                for uuid, response in zip(presentation_uuids, detail_responses):
+                    if not isinstance(response, Exception) and response.is_success:
+                        payload = response.json()
+                        if isinstance(payload, dict):
+                            self._playlist_presentation_details[uuid] = self._presentation_payload(payload)
+                self._playlist_details_key = presentation_uuids
+                self._playlist_details_refreshed = clock
         active = self._active_payload
         playlist_payload = self._playlist_payload
         current = slide.get("current") or {}
         next_slide = slide.get("next") or {}
         index = self._index(index_payload)
         presentation = active.get("presentation", active)
+        presentation_uuid = self._presentation_uuid(presentation)
+        # /presentation/active can be intentionally sparse on some
+        # ProPresenter versions. Fetch the identified presentation so the
+        # playlist widget has every cue, group and label—not just Now/Next.
+        if presentation_uuid and (
+            presentation_uuid != self._presentation_details_uuid
+            or clock - self._presentation_details_refreshed >= 0.5
+        ):
+            detail_response = await self._http().get(
+                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}"
+            )
+            if detail_response.is_success and isinstance(detail_response.json(), dict):
+                self._presentation_details_payload = self._presentation_payload(detail_response.json())
+                self._presentation_details_uuid = presentation_uuid
+                self._presentation_details_refreshed = clock
+        detailed_presentation = self._presentation_details_payload if self._presentation_details_uuid == presentation_uuid else {}
+        if detailed_presentation:
+            presentation = {**presentation, **detailed_presentation}
         cue_entries = self._presentation_cue_entries(presentation)
         cue_total = self._cue_total(index_payload, len(cue_entries))
         current_position, next_position = self._cue_positions(cue_entries, current, next_slide, index)
@@ -80,7 +163,7 @@ class ProPresenterClient:
         next_result = self._slide(next_slide)
         current_result["notes"] = current_result["notes"] or self._notes(current_details)
         next_result["notes"] = next_result["notes"] or self._notes(next_details)
-        presentation_uuid = self._presentation_uuid(presentation)
+        presentation_uuid = self._presentation_uuid(presentation) or presentation_uuid
         playlist_context = self._playlist_context(playlist_payload)
         if clock - self._transport_refreshed >= 0.5:
             transport_responses = await asyncio.gather(
@@ -124,6 +207,23 @@ class ProPresenterClient:
             if next_result["image_uuid"] or next_details else "",
             "timer_text": self._countdown_text(next_result.get("text")),
         })
+        playlist_presentations = self._playlist_presentations(self._playlist_items_payload, playlist_context)
+        for item in playlist_presentations:
+            item_uuid = item.get("presentation_uuid") or ""
+            item_details = self._playlist_presentation_details.get(item_uuid) or {}
+            entries = self._presentation_cue_entries(item_details)
+            item["slides"] = [
+                {
+                    "index": position + 1,
+                    "text": self._slide(entry.get("cue")).get("text", ""),
+                    "notes": self._notes(entry.get("cue")),
+                    "part": entry.get("part", ""),
+                    "color": entry.get("color", ""),
+                    "image_url": self._thumbnail_url(item_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")),
+                    "active": item_uuid == presentation_uuid and position == current_position,
+                }
+                for position, entry in enumerate(entries)
+            ]
         return {
             "connected": True,
             "title": self._presentation_title(presentation),
@@ -131,13 +231,159 @@ class ProPresenterClient:
             **playlist_context,
             "current": current_result,
             "next": next_result,
+            "timers": self._transport_payload.get("timers") or [],
+            "slides": [
+                {"index": position + 1, "text": self._slide(entry.get("cue")).get("text", ""), "notes": self._notes(entry.get("cue")), "part": entry.get("part", ""), "color": entry.get("color", ""), "image_url": self._thumbnail_url(presentation_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")), "active": position == current_position}
+                for position, entry in enumerate(cue_entries)
+            ],
+            "playlist_presentations": playlist_presentations,
         }
+
+    async def trigger_active_playlist_item(self, index: int) -> None:
+        if index < 0 or index > 10000:
+            raise ValueError("Invalid ProPresenter playlist item index")
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        # The destination-specific active route is not implemented by every
+        # ProPresenter build. Resolve the UUID and use the documented explicit
+        # playlist route first; this also prevents a focus change from sending
+        # the cue to a different playlist.
+        focused_response = await self._http().get(f"{base}/v1/playlist/focused")
+        focused_payload = focused_response.json() if focused_response.is_success else {}
+        active_response = await self._http().get(f"{base}/v1/playlist/active")
+        active_payload = active_response.json() if active_response.is_success else {}
+        playlist_uuid = (
+            self._playlist_context(focused_payload).get("playlist_uuid")
+            or self._playlist_context(active_payload).get("playlist_uuid")
+        )
+        if not playlist_uuid:
+            raise ValueError("ProPresenter did not report a focused or active playlist")
+        response = await self._http().get(
+            f"{base}/v1/playlist/{quote(playlist_uuid, safe='')}/{index}/trigger"
+        )
+        response.raise_for_status()
+
+    async def trigger_playlist_presentation(self, index: int, presentation_uuid: str | None = None) -> None:
+        """Trigger a playlist card, preferring the presentation's own UUID.
+
+        Playlist indexes include headers and media rows, and several ProPresenter
+        versions reject those indexes with HTTP 400. A presentation UUID is the
+        stable identifier displayed by the playlist API.
+        """
+        if presentation_uuid and re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid):
+            base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+            response = await self._http().get(
+                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/trigger"
+            )
+            if response.is_success:
+                return
+            # Planning Center-linked items often expose an arrangement UUID
+            # here, not a standalone presentation UUID. Their playlist index
+            # remains the authoritative trigger target.
+            if response.status_code != 404:
+                response.raise_for_status()
+        await self.trigger_active_playlist_item(index)
+
+    @classmethod
+    def _playlist_presentations(cls, raw: Any, context: dict[str, Any]) -> list[dict[str, Any]]:
+        """Normalize the several playlist shapes returned by ProPresenter 7."""
+        rows: list[Any] = []
+        def visit(value: Any) -> None:
+            if isinstance(value, list):
+                for child in value:
+                    visit(child)
+            elif isinstance(value, dict):
+                if any(key in value for key in ("presentation", "presentation_id", "presentation_uuid")) or str(value.get("type") or "").casefold() == "presentation":
+                    rows.append(value)
+                else:
+                    found_children = False
+                    for key in ("items", "children", "playlist_items"):
+                        if key in value:
+                            found_children = True
+                            visit(value[key])
+                    # Some ProPresenter releases omit a `type` field on
+                    # playlist rows. A named leaf with an id is still a
+                    # triggerable presentation item, so retain it.
+                    identifier = value.get("id") if isinstance(value.get("id"), dict) else value
+                    kind = str(value.get("type") or "").casefold()
+                    if not found_children and (value.get("name") or identifier.get("name")) and (value.get("uuid") or identifier.get("uuid")) and kind not in {"playlist", "folder", "playlist_folder"}:
+                        rows.append(value)
+        visit(raw)
+        results = []
+        for position, row in enumerate(rows):
+            presentation = row.get("presentation") if isinstance(row.get("presentation"), dict) else row
+            title = cls._presentation_title(presentation) or cls._presentation_title(row) or str(row.get("name") or "Presentation")
+            presentation_info = row.get("presentation_info") if isinstance(row.get("presentation_info"), dict) else {}
+            kind = str(row.get("type") or "presentation").casefold()
+            triggerable = kind == "presentation"
+            identifier = (str(presentation_info.get("presentation_uuid") or "") or cls._presentation_uuid(presentation) or str(row.get("presentation_uuid") or row.get("presentation_id") or "")) if triggerable else ""
+            raw_index = row.get("index")
+            if raw_index is None and isinstance(row.get("id"), dict):
+                raw_index = row["id"].get("index")
+            try:
+                index = int(raw_index) if raw_index is not None else position
+            except (TypeError, ValueError):
+                index = position
+            results.append({"index": index, "title": title, "presentation_uuid": identifier, "active": index == context.get("service_item_index"), "is_pco": bool(row.get("is_pco")), "type": kind, "triggerable": triggerable})
+        return results
+
+    async def trigger_active_slide(self, index: int) -> None:
+        """Trigger a cue in the active presentation through ProPresenter's API."""
+        if index < 0 or index > 10000:
+            raise ValueError("Invalid ProPresenter slide index")
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        response = await self._http().get(f"{base}/v1/presentation/active/{index}/trigger")
+        response.raise_for_status()
+
+    async def trigger_presentation_slide(self, presentation_uuid: str, index: int) -> None:
+        """Trigger a cue by UUID, falling back for PCO-linked presentations."""
+        if not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid or ""):
+            raise ValueError("Invalid ProPresenter presentation UUID")
+        if index < 0 or index > 10000:
+            raise ValueError("Invalid ProPresenter slide index")
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        response = await self._http().get(
+            f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/{index}/trigger"
+        )
+        if response.is_success:
+            return
+        # Some Planning Center-linked playlist items expose a presentation UUID
+        # that works for details and thumbnails but is rejected by the direct
+        # trigger route. The expanded slides always describe the live
+        # presentation, so the documented active cue route is the safe fallback.
+        if response.status_code not in {400, 404}:
+            response.raise_for_status()
+        await self.trigger_active_slide(index)
+
+    async def trigger_playlist_slide(self, playlist_index: int, presentation_uuid: str, cue_index: int, is_pco: bool = False) -> None:
+        """Trigger one cue from any presentation in the visible playlist."""
+        if not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid or ""):
+            raise ValueError("Invalid ProPresenter presentation UUID")
+        if cue_index < 0 or cue_index > 10000:
+            raise ValueError("Invalid ProPresenter slide index")
+        base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
+        response = await self._http().get(
+            f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/{cue_index}/trigger"
+        )
+        if response.is_success:
+            return
+        if response.status_code not in {400, 404}:
+            response.raise_for_status()
+        # PCO-linked items can reject their presentation UUID. Activate the
+        # playlist row first, then cue its now-active presentation.
+        await self.trigger_playlist_presentation(playlist_index, None if is_pco else presentation_uuid)
+        await self.trigger_active_slide(cue_index)
 
     @staticmethod
     def _playlist_context(raw: Any) -> dict[str, Any]:
         destination = raw.get("presentation") if isinstance(raw, dict) else {}
         destination = destination if isinstance(destination, dict) else {}
+        if isinstance(raw, dict) and not destination:
+            destination = raw
         playlist = destination.get("playlist") if isinstance(destination.get("playlist"), dict) else {}
+        if not playlist:
+            identifier = destination.get("id") if isinstance(destination.get("id"), dict) else destination
+            if destination.get("uuid") or identifier.get("uuid"):
+                playlist = destination
         item = destination.get("item") if isinstance(destination.get("item"), dict) else {}
         playlist_item = destination.get("playlist_item") if isinstance(destination.get("playlist_item"), dict) else {}
         identifier = playlist_item.get("id") if isinstance(playlist_item.get("id"), dict) else {}
@@ -148,12 +394,13 @@ class ProPresenterClient:
                 index = None
         except (TypeError, ValueError):
             index = None
+        playlist_identifier = playlist.get("id") if isinstance(playlist.get("id"), dict) else playlist
         return {
             "service_item_title": str(item.get("name") or identifier.get("name") or "").strip(),
             "service_item_index": index,
             "service_item_is_pco": bool(playlist_item.get("is_pco")),
-            "playlist_name": str(playlist.get("name") or "").strip(),
-            "playlist_uuid": str(playlist.get("uuid") or "").strip(),
+            "playlist_name": str(playlist.get("name") or playlist_identifier.get("name") or "").strip(),
+            "playlist_uuid": str(playlist.get("uuid") or playlist_identifier.get("uuid") or "").strip(),
         }
 
     @staticmethod
@@ -291,6 +538,7 @@ class ProPresenterClient:
 
     @classmethod
     def _presentation_cue_entries(cls, raw: Any) -> list[dict[str, Any]]:
+        raw = cls._presentation_payload(raw)
         if not isinstance(raw, dict):
             return []
         groups = raw.get("groups") or []
@@ -349,6 +597,19 @@ class ProPresenterClient:
         for group_id in sequence_ids:
             entries.extend(cls._cue_entries(group_map[group_id]))
         return entries
+
+    @classmethod
+    def _presentation_payload(cls, raw: Any) -> dict[str, Any]:
+        """Normalize wrapped presentation-detail responses across versions."""
+        if not isinstance(raw, dict):
+            return {}
+        for key in ("presentation", "document"):
+            nested = raw.get(key)
+            if isinstance(nested, dict) and any(
+                field in nested for field in ("groups", "arrangements", "cues", "slides")
+            ):
+                return cls._presentation_payload(nested)
+        return raw
 
     @classmethod
     def _cue_positions(
@@ -414,7 +675,7 @@ class ProPresenterClient:
             return entries
 
         entries = []
-        groups = raw.get("groups") or []
+        groups = raw.get("groups") or raw.get("children") or raw.get("items") or []
         if isinstance(groups, dict):
             groups = list(groups.values())
         for group in groups:

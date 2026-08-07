@@ -18,8 +18,9 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 ## What ChurchBoard shows
 
 - Photo-forward scheduled-position and microphone cards, including unassigned positions and a per-widget choice between one card per person or one card per position
-- Shure QLX-D/ULX-D and Sennheiser EW-DX battery, RF/audio, transmitter, mute, warning, and online/offline status
+- Shure QLX-D/ULX-D/SLX-D and Sennheiser EW-DX battery, RF/audio, transmitter, mute, warning, and online/offline status
 - Current and next ProPresenter slides as text or slide images, with live countdown overlays and video playback progress
+- A scrollable ProPresenter playlist that shows every playlist item, placeholder, presentation, section marker, and slide thumbnail; trusted operators can trigger a presentation or individual slide from ChurchBoard
 - ProPresenter item title, part labels and colors, slide number, and notes
 - Compact, complete scrollable, or fit-to-board Planning Center orders of service—including pre-service and post-service sections—with durations, estimated clock times, leaders, and mapped microphones
 - Current item and overall service timing
@@ -38,17 +39,17 @@ Choose your computer and click its download link:
 
 | Your computer | Download |
 | --- | --- |
-| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.0-Windows-x64-Setup.exe)** |
-| **Mac with Apple silicon** — M1 or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.0-macOS-arm64.dmg)** |
-| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.0-macOS-x86_64.dmg)** |
-| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.0-Linux-amd64.deb)** |
-| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.0-Linux-x86_64.tar.gz)** |
+| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Windows-x64-Setup.exe)** |
+| **Mac with Apple silicon** — M1 or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-macOS-arm64.dmg)** |
+| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-macOS-x86_64.dmg)** |
+| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Linux-amd64.deb)** |
+| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/WorshipWarehouse/ChurchBoard/releases/latest/download/ChurchBoard-1.3.1-Linux-x86_64.tar.gz)** |
 
 Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it says **Chip**, use Apple silicon. If it says **Processor**, use Intel.
 
 **Raspberry Pi:** jump to the [one-command Raspberry Pi installer](#raspberry-pi).
 
-[View all v1.3.0 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v1.3.0)
+[View all v1.3.1 downloads and release notes](https://github.com/WorshipWarehouse/ChurchBoard/releases/tag/v1.3.1)
 
 ## Install
 
@@ -61,13 +62,13 @@ On macOS, the supplied old-school wooden board icon stays in the menu bar. On Wi
 For Raspberry Pi OS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/wtapper89/ChurchBoard/main/installers/raspberry-pi/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/WorshipWarehouse/ChurchBoard/main/installers/raspberry-pi/install.sh | bash
 ```
 
 Add `--kiosk` to open the Main dashboard fullscreen after desktop login:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/wtapper89/ChurchBoard/main/installers/raspberry-pi/install.sh | bash -s -- --kiosk
+curl -fsSL https://raw.githubusercontent.com/WorshipWarehouse/ChurchBoard/main/installers/raspberry-pi/install.sh | bash -s -- --kiosk
 ```
 
 See [Installation](docs/INSTALLATION.md) for detailed steps, updates, automatic-start behavior, and uninstall instructions.
@@ -82,7 +83,7 @@ Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Pla
 
 ## Dashboard editing
 
-Each dashboard has a stable URL. Add widgets from the palette, drag and resize them directly on the canvas, then configure the selected widget in the inspector. Every widget title can be hidden. Scheduled-position widgets can consolidate multiple roles into one card per person or retain one card per position. ProPresenter widgets can show full details or previews only, and their part labels can be switched on or off. Order-of-service widgets can show a compact current window, a scrollable complete plan, or the complete plan fitted to the widget. Text, cards, photos, and status displays scale with their widget. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
+Each dashboard has a stable URL. Add widgets from the palette, drag and resize them directly on the canvas, then configure the selected widget in the inspector. Every widget title can be hidden. Scheduled-position widgets can consolidate multiple roles into one card per person or retain one card per position. The ProPresenter playlist widget shows the focused playlist as a continuous scrollable list, including placeholders and all presentation slides; its inspector controls slide, playlist-item, and section-marker sizes plus the active-slide border color. Order-of-service widgets can show a compact current window, a scrollable complete plan, or the complete plan fitted to the widget. Text, cards, photos, and status displays scale with their widget and remain visible when a display changes size or enters fullscreen. Setup can cancel a new dashboard before it is named, and the editor includes a confirmation-protected **Delete display** action. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
 
 ![ChurchBoard WYSIWYG dashboard editor](docs/screenshots/dashboard-editor.jpg)
 

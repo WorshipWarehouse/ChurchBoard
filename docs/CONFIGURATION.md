@@ -40,14 +40,16 @@ Every selected position appears even when no person or microphone is assigned. *
 
 ## 3. Add Shure microphones
 
-ChurchBoard focuses on networked Shure QLX-D and ULX-D receivers.
+ChurchBoard monitors networked Shure QLX-D, ULX-D, and SLX-D receivers through the Shure TCP control protocol.
 
 1. Give each receiver a stable IP address or DHCP reservation.
 2. In Setup, enable **Receiver monitoring**.
 3. Choose **+ Add microphone**.
-4. Enter a friendly mic name such as `Red`, the receiver IP, and channel.
+4. Choose the receiver family, then enter a friendly mic name such as `Red`, the receiver IP, and channel.
 5. Choose the Planning Center position that uses that mic.
 6. Repeat for up to ten displayed microphones, then save.
+
+For an **SLX-D** receiver, open `Advanced Settings → Controller Access` on the receiver and select **Allow** before adding it to ChurchBoard. SLX-D blocks third-party command strings by default. It connects over TCP port **2202**, the same port used by QLX-D and ULX-D. ChurchBoard reads the channel name, battery bars, RF and audio meters, transmitter type, and frequency; it does not change receiver settings.
 
 The photo card and compact audio card use status borders:
 

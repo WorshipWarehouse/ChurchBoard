@@ -15,6 +15,7 @@ from app.services.shure import ShureClient
 from app.services.sennheiser import SennheiserClient
 from app.services.spl_reports import SPLReportStore
 from app.services.osm import OSMListener
+from app.services.obs import OBSClient
 from app.services.restream import RestreamClient
 from app.store import ConfigStore
 
@@ -26,7 +27,7 @@ class RuntimeService:
         self.state: dict[str, Any] = self.demo_state()
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
-        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0, "sennheiser": 0.0, "restream": 0.0}
+        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0, "sennheiser": 0.0, "restream": 0.0, "obs": 0.0}
         self._service_control: dict[str, Any] = {"active": False}
         self._pp_live_candidate = ""
         self._pp_live_candidate_since = 0.0
@@ -41,6 +42,8 @@ class RuntimeService:
         self._osm_auto_source_key = ""
         self._restream_client: RestreamClient | None = None
         self._restream_key: tuple[Any, ...] | None = None
+        self._obs_client: OBSClient | None = None
+        self._obs_key: tuple[Any, ...] | None = None
 
     def record_spl_measurement(self, measurement: dict[str, Any], metric_key: str = "a_fast", metric_label: str = "A-weighted Fast") -> None:
         """Persist a normalized bridge reading against the current LIVE item."""
@@ -110,6 +113,9 @@ class RuntimeService:
         if self._restream_client is not None:
             await self._restream_client.close()
             self._restream_client = None
+        if self._obs_client is not None:
+            await self._obs_client.close()
+            self._obs_client = None
         if self._planning_center_detail_task is not None:
             self._planning_center_detail_task.cancel()
             try:
@@ -334,6 +340,20 @@ class RuntimeService:
                 next_state["restream"] = {"connected": False, "status": "offline", "title": "Restream unavailable", "destinations": [], "error": str(exc)}
         elif not self._restream_client.configured:
             next_state["restream"] = {"connected": False, "status": "offline", "title": "Restream is not connected", "destinations": []}
+        obs_settings = config.get("obs", {})
+        obs_key = (bool(obs_settings.get("enabled")), str(obs_settings.get("host") or ""), int(obs_settings.get("port") or 4455), str(obs_settings.get("password") or ""))
+        if self._obs_client is None or obs_key != self._obs_key:
+            if self._obs_client is not None: await self._obs_client.close()
+            self._obs_client, self._obs_key = OBSClient(obs_settings), obs_key
+        obs_due = clock - self._last_refresh["obs"] >= max(.25, float(obs_settings.get("refresh_seconds", .5)))
+        if self._obs_client.configured and (force or obs_due):
+            self._last_refresh["obs"] = clock
+            try: next_state["obs"] = await self._obs_client.status()
+            except Exception as exc:
+                await self._obs_client.close()
+                next_state["obs"] = {"connected": False, "streaming": False, "recording": False, "alert": "OBS unavailable", "error": str(exc), "sources": []}
+        elif not self._obs_client.configured:
+            next_state["obs"] = {"connected": False, "streaming": False, "recording": False, "alert": "", "sources": []}
         self._apply_assignments(next_state, config.get("position_mic_map", {}))
         self._apply_service_control(next_state)
         self.state = next_state
@@ -902,5 +922,5 @@ class RuntimeService:
             "organization_name": "My Church", "timezone": "America/New_York", "updated_at": now.isoformat(), "service": service, "plans": [service], "people": people,
             "timing": calculate_timing(service, now), "mics": mics,
             "planning_center": {"connected": True, "demo": True, "error": ""},
-            "propresenter": {"connected": True, "demo": True, "title": "Amazing Grace", "current": {"text": "Amazing grace, how sweet the sound", "notes": "Band: build into the chorus", "image_uuid": "", "image_url": "", "part": "Chorus", "color": "#9c6cff", "index": 3, "total": 8}, "next": {"text": "That saved a wretch like me", "notes": "", "image_uuid": "", "image_url": "", "part": "Verse 2", "color": "#45b7d1", "index": 4, "total": 8}},
+            "propresenter": {"connected": True, "demo": True, "title": "Amazing Grace", "current": {"text": "Amazing grace, how sweet the sound", "notes": "Band: build into the chorus", "image_uuid": "", "image_url": "", "part": "Chorus", "color": "#9c6cff", "index": 3, "total": 8}, "next": {"text": "That saved a wretch like me", "notes": "", "image_uuid": "", "image_url": "", "part": "Verse 2", "color": "#45b7d1", "index": 4, "total": 8}, "slides": [{"index": index, "text": text, "notes": "Band: build into the chorus" if index == 3 else "", "part": part, "color": color, "image_url": "", "active": index == 3} for index, text, part, color in [(1, "Amazing grace, how sweet the sound", "Verse 1", "#45b7d1"), (2, "That saved a wretch like me", "Verse 1", "#45b7d1"), (3, "Amazing grace, how sweet the sound", "Chorus", "#9c6cff"), (4, "That saved a wretch like me", "Verse 2", "#45b7d1"), (5, "I once was lost, but now am found", "Verse 2", "#45b7d1"), (6, "Was blind, but now I see", "Verse 2", "#45b7d1"), (7, "My chains are gone", "Bridge", "#f2a23a"), (8, "Amazing grace", "Tag", "#5cda8b")] ]},
         }

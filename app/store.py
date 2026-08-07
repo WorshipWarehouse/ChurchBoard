@@ -16,6 +16,7 @@ DEFAULT_WIDGETS = [
     {"id": "assignments", "type": "assignments", "x": 0, "y": 2, "w": 7, "h": 6, "title": "Scheduled Positions & Mics", "settings": {"team_ids": [], "position_keys": [], "position_labels": {}, "positions": [], "display_mode": "photos", "card_grouping": "person", "use_planning_center_icon": False, "unassigned_media_title": "Icon"}},
     {"id": "slides", "type": "slides", "x": 7, "y": 2, "w": 5, "h": 4, "title": "ProPresenter", "settings": {"show_notes": True, "slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False}},
     {"id": "order", "type": "order", "x": 7, "y": 6, "w": 5, "h": 2, "title": "Order of Service", "settings": {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False}},
+    {"id": "playlist", "type": "playlist", "x": 0, "y": 8, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400"}},
 ]
 
 
@@ -52,7 +53,7 @@ def default_data() -> dict[str, Any]:
                     "refresh_seconds": 0.5,
                 },
             },
-            "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.075},
+            "propresenter": {"enabled": False, "host": "127.0.0.1", "port": 50001, "refresh_seconds": 0.075, "remote_control_enabled": False},
             "shure": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
             "sennheiser": {"enabled": False, "refresh_seconds": 0.5, "receivers": [], "mics": []},
             "open_sound_meter": {
@@ -63,6 +64,7 @@ def default_data() -> dict[str, Any]:
                 "source_id": "",
             },
             "restream": {"enabled": False, "client_id": "", "client_secret": "", "access_token": "", "refresh_token": "", "access_token_expires_at": 0, "refresh_seconds": 5},
+            "obs": {"enabled": False, "host": "127.0.0.1", "port": 4455, "password": "", "refresh_seconds": 0.5, "dropped_frames_threshold": 2, "preview_url": ""},
             "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
             "manual_plan": None,
         },
@@ -91,7 +93,7 @@ class ConfigStore:
             baseline = default_data()
             baseline.update(raw)
             baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
-            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream"):
+            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream", "obs"):
                 baseline["settings"][section] = {
                     **default_data()["settings"][section],
                     **raw.get("settings", {}).get(section, {}),
@@ -104,6 +106,9 @@ class ConfigStore:
                 dashboard.pop("theme", None)
                 if dashboard.get("id") == "audio" and not any(widget.get("type") == "spl" for widget in dashboard.get("widgets", [])):
                     dashboard.setdefault("widgets", []).append({"id": "osm", "type": "spl", "x": 7, "y": 8, "w": 5, "h": 3, "title": "Open Sound Meter", "settings": {"green_max": 75, "orange_max": 85, "reports_enabled": True}})
+                if not any(widget.get("type") == "playlist" for widget in dashboard.get("widgets", [])):
+                    next_row = max((int(widget.get("y", 0)) + int(widget.get("h", 1)) for widget in dashboard.get("widgets", [])), default=0)
+                    dashboard.setdefault("widgets", []).append({"id": "playlist", "type": "playlist", "x": 0, "y": next_row, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400"}})
                 color = str(dashboard.get("background_color") or "").strip().lower()
                 valid_color = len(color) == 7 and color.startswith("#") and all(
                     character in "0123456789abcdef" for character in color[1:]
@@ -117,11 +122,14 @@ class ConfigStore:
                     if widget.get("type") == "assignments":
                         widget["settings"] = {"team_ids": [], "position_keys": [], "position_labels": {}, "display_mode": "photos", "card_grouping": "person", "use_planning_center_icon": False, "unassigned_media_title": "Icon", **widget.get("settings", {})}
                     if widget.get("type") == "slides":
-                        widget["settings"] = {"slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False, "show_notes": True, **widget.get("settings", {})}
+                        widget["settings"] = {"slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False, "show_notes": True, "show_grid": False, "allow_remote_trigger": False, **widget.get("settings", {})}
+                    if widget.get("type") == "playlist":
+                        widget["settings"] = {"allow_remote_trigger": True, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400", **widget.get("settings", {})}
                     if widget.get("type") == "order":
                         widget["settings"] = {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
                     if widget.get("type") == "spl":
                         widget["settings"] = {"green_max": 75, "orange_max": 85, "reports_enabled": True, **widget.get("settings", {})}
+            baseline["dashboards"] = [dashboard for dashboard in baseline["dashboards"] if dashboard.get("id") != "service-producer"]
             return baseline
 
     def save(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -150,4 +158,7 @@ class ConfigStore:
         restream["access_token"] = ""
         restream["client_secret"] = ""
         restream["refresh_token"] = ""
+        obs = settings.get("obs", {})
+        obs["password_configured"] = bool(obs.get("password"))
+        obs["password"] = ""
         return settings

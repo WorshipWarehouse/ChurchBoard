@@ -53,6 +53,13 @@ class OSMMeasurement(BaseModel):
     timestamp: str | None = None
 
 
+class ProPresenterSlideTrigger(BaseModel):
+    index: int
+    presentation_uuid: str | None = None
+    playlist_index: int | None = None
+    is_pco: bool = False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = load_config()
@@ -182,6 +189,8 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     for secret_name in ("client_secret", "access_token", "refresh_token"):
         if not settings.get("restream", {}).get(secret_name):
             settings.setdefault("restream", {})[secret_name] = existing_restream.get(secret_name, "")
+    if not settings.get("obs", {}).get("password"):
+        settings.setdefault("obs", {})["password"] = data["settings"].get("obs", {}).get("password", "")
     data["settings"] = settings
     store.save(data)
     await request.app.state.runtime.refresh(force=True)
@@ -198,6 +207,9 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
     # photos, and media catalog change slowly and are cached by the display.
     timing = state.get("timing") or {}
     timing.pop("service_items", None)
+    propresenter = state.get("propresenter") or {}
+    propresenter.pop("playlist_presentations", None)
+    propresenter.pop("slides", None)
     payload = {
         key: state.get(key)
         for key in (
@@ -209,8 +221,10 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
             "service_control",
             "osm",
             "restream",
+            "obs",
         )
     }
+    payload["propresenter"] = propresenter
     encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     etag = f'"{sha256(encoded).hexdigest()}"'
     if request.headers.get("if-none-match") == etag:
@@ -450,6 +464,63 @@ async def propresenter_thumbnail(presentation_uuid: str, index: int, request: Re
     except Exception as exc:
         raise HTTPException(502, f"Could not load the ProPresenter slide image: {exc}") from exc
     return Response(content=content, media_type=media_type, headers={"Cache-Control": "private, max-age=2"})
+
+
+@app.post("/api/integrations/propresenter/active-slide")
+async def propresenter_trigger_active_slide(payload: ProPresenterSlideTrigger, request: Request) -> dict:
+    settings = store_from(request).load()["settings"].get("propresenter", {})
+    if not settings.get("remote_control_enabled"):
+        raise HTTPException(403, "Enable ProPresenter remote slide triggering in Setup first")
+    client = ProPresenterClient(settings)
+    if not client.configured:
+        raise HTTPException(400, "ProPresenter is not connected")
+    try:
+        if payload.presentation_uuid and payload.playlist_index is not None:
+            await client.trigger_playlist_slide(payload.playlist_index, payload.presentation_uuid, payload.index, payload.is_pco)
+        elif payload.presentation_uuid:
+            await client.trigger_presentation_slide(payload.presentation_uuid, payload.index)
+        else:
+            await client.trigger_active_slide(payload.index)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Could not trigger the ProPresenter slide: {exc}") from exc
+    finally:
+        await client.close()
+    return {"ok": True, "index": payload.index + 1}
+
+
+@app.get("/api/integrations/propresenter/playlist-diagnostics")
+async def propresenter_playlist_diagnostics(request: Request) -> dict:
+    settings = store_from(request).load()["settings"].get("propresenter", {})
+    client = ProPresenterClient(settings)
+    if not client.configured:
+        raise HTTPException(400, "ProPresenter is not connected")
+    try:
+        return await client.playlist_diagnostics()
+    except Exception as exc:
+        raise HTTPException(502, f"Could not read the ProPresenter playlist diagnostics: {exc}") from exc
+    finally:
+        await client.close()
+
+
+@app.post("/api/integrations/propresenter/active-playlist-item")
+async def propresenter_trigger_active_playlist_item(payload: ProPresenterSlideTrigger, request: Request) -> dict:
+    settings = store_from(request).load()["settings"].get("propresenter", {})
+    if not settings.get("remote_control_enabled"):
+        raise HTTPException(403, "Enable ProPresenter remote slide triggering in Setup first")
+    client = ProPresenterClient(settings)
+    if not client.configured:
+        raise HTTPException(400, "ProPresenter is not connected")
+    try:
+        await client.trigger_playlist_presentation(payload.index, None if payload.is_pco else payload.presentation_uuid)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Could not trigger the ProPresenter playlist item: {exc}") from exc
+    finally:
+        await client.close()
+    return {"ok": True, "index": payload.index + 1}
 
 
 def run() -> None:

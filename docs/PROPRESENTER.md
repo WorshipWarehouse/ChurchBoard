@@ -1,6 +1,6 @@
 # ProPresenter setup
 
-ChurchBoard can read ProPresenter's current and next slides, slide images, notes, item title, part labels, colors, and slide number. It can also match the active ProPresenter item to the same Planning Center plan and optionally use that match to advance Planning Center Services LIVE.
+ChurchBoard can read ProPresenter's current and next slides, slide images, notes, item title, part labels, colors, and slide number. Its ProPresenter Playlist widget also displays the focused playlist, including placeholders, every presentation, section markers, and all available slide thumbnails. On a trusted production network, ChurchBoard can trigger a playlist presentation or any slide within it. It can also match the active ProPresenter item to the same Planning Center plan and optionally use that match to advance Planning Center Services LIVE.
 
 The most reliable workflow is to connect ProPresenter to Planning Center and open the service as a linked **Planning Center Service** playlist instead of building an unrelated local playlist.
 
@@ -51,7 +51,8 @@ ChurchBoard reads ProPresenter over the local network.
 3. Enable **Network**.
 4. Record the ProPresenter computer's local **IP address** and **Port** shown in this panel.
 5. In ChurchBoard Setup, enable **ProPresenter**, enter that IP address and port, and save settings.
-6. Open a ChurchBoard display and confirm that slide/item data updates when slides change.
+6. To allow remote control, enable **Allow ChurchBoard to trigger ProPresenter slides**. Only enable this for trusted operators on the production network.
+7. Open a ChurchBoard display and confirm that slide/item data updates when slides change.
 
 Renewed Vision documents the Network controls in [ProPresenter Preferences](https://learn.renewedvision.com/propresenter/preferences) and its API in [Other Features](https://learn.renewedvision.com/propresenter/other-features).
 
@@ -65,7 +66,7 @@ For a dependable production connection:
 
 The address entered in ChurchBoard must be the ProPresenter computer's LAN address, not `127.0.0.1`, unless ChurchBoard and ProPresenter run on the same computer.
 
-## 4. Configure the ChurchBoard ProPresenter widget
+## 4. Configure ChurchBoard ProPresenter widgets
 
 In ChurchBoard's dashboard editor, select a **ProPresenter** widget and choose:
 
@@ -76,7 +77,25 @@ In ChurchBoard's dashboard editor, select a **ProPresenter** widget and choose:
 
 Part labels use their ProPresenter colors. If parts do not change with the slide, confirm the cues/groups in the presentation are named and colored in ProPresenter.
 
+For the **ProPresenter playlist** widget, select the focused playlist in ProPresenter. ChurchBoard renders its placeholders and presentations in playlist order, and shows every slide in a presentation continuously with its section marker beneath the thumbnail. Click a presentation heading to trigger that item; click a slide thumbnail to trigger that exact slide. The widget settings let you adjust slide, playlist-item, and section-marker scale, as well as preview the active-slide border color before saving. ChurchBoard retains the playlist scroll position as live information refreshes.
+
+ChurchBoard also publishes the active presentation as a slide-grid feed. Every
+cue includes its number, text, notes, ProPresenter part/color, active state,
+and a proxied thumbnail URL. This lets a Service Producer view present a
+section-aware grid beside the order of service without exposing the
+ProPresenter computer directly to browsers.
+
+## Remote slide triggering
+
+Remote triggering is deliberately disabled by default. In Setup, enable
+**Allow ChurchBoard to trigger ProPresenter slides** only for a trusted,
+authenticated production-network deployment. ChurchBoard's protected endpoint
+then triggers the selected zero-based cue in the active presentation; it never
+enables control merely because a dashboard is being viewed.
+
 When the active slide contains a ProPresenter timer element, ChurchBoard replaces its design-time placeholder with the currently running ProPresenter timer and composites that changing value over the otherwise static slide thumbnail. Video remaining time is kept separate and is never shown as a slide timer. For foreground video cues, ChurchBoard displays playing state, elapsed time, duration, and progress; looping motion backgrounds behind lyrics do not receive that overlay. ProPresenter's HTTP API exposes static cue/media thumbnails and transport information, but not live rendered audience-screen frames, so moving video cannot be reproduced from that API alone. A true moving preview would require a separate browser-compatible output stream from ProPresenter or a capture application such as OBS.
+
+Add a **ProPresenter timers** widget from the dashboard editor to show every configured ProPresenter timer that the Network API returns. Each card shows its timer name, current value, and state; the widget is read-only and updates from ProPresenter without controlling timer playback.
 
 ## 5. Let ProPresenter drive Planning Center Services LIVE
 
