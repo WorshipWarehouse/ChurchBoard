@@ -22,16 +22,7 @@ class TheLightingControllerClient:
     async def buttons(self) -> list[dict[str, Any]]:
         reader, writer = await self._connect()
         try:
-            await self._send(writer, "BUTTON_LIST")
-            while True:
-                line = await self._read_line(reader, "the exposed button list")
-                if not line:
-                    raise ConnectionError("The lighting controller closed the connection")
-                text = line.decode("utf-8", "replace").rstrip("\r\n")
-                if text.startswith("ERROR|"):
-                    raise ValueError(text.split("|", 1)[1] or "The lighting controller rejected the request")
-                if text.startswith("BUTTON_LIST|"):
-                    return self._parse_buttons(text.split("|", 1)[1])
+            return await self._button_list(reader, writer)
         finally:
             writer.close()
             await writer.wait_closed()
@@ -41,14 +32,14 @@ class TheLightingControllerClient:
             raise ValueError("Invalid lighting button name")
         if mode not in {"press", "release", "toggle"}:
             raise ValueError("Lighting button mode must be press, release, or toggle")
-        # Query first so ChurchBoard never becomes an arbitrary TCP command proxy.
-        buttons = await self.buttons()
-        button = next((item for item in buttons if item["name"] == name), None)
-        if button is None:
-            raise ValueError("That lighting button is no longer exposed by the controller")
         reader, writer = await self._connect()
-        del reader
         try:
+            # Keep discovery and the command in the same authenticated session.
+            # TLC installations commonly accept only one External App client.
+            buttons = await self._button_list(reader, writer)
+            button = next((item for item in buttons if item["name"] == name), None)
+            if button is None:
+                raise ValueError("That lighting button is no longer exposed by the controller")
             if mode == "toggle" and button["flash"]:
                 # Flash buttons are momentary scenes; a click must not leave
                 # one held down after ChurchBoard's request finishes.
@@ -60,6 +51,18 @@ class TheLightingControllerClient:
         finally:
             writer.close()
             await writer.wait_closed()
+
+    async def _button_list(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> list[dict[str, Any]]:
+        await self._send(writer, "BUTTON_LIST")
+        while True:
+            line = await self._read_line(reader, "the exposed button list")
+            if not line:
+                raise ConnectionError("The lighting controller closed the connection")
+            text = line.decode("utf-8", "replace").rstrip("\r\n")
+            if text.startswith("ERROR|"):
+                raise ValueError(text.split("|", 1)[1] or "The lighting controller rejected the request")
+            if text.startswith("BUTTON_LIST|"):
+                return self._parse_buttons(text.split("|", 1)[1])
 
     async def _connect(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         host = str(self.settings.get("host") or "").strip()
