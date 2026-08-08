@@ -8,6 +8,8 @@
 
 ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, Shure QLX-D/ULX-D/SLX-D and Sennheiser EW-DX microphone telemetry, Open Sound Meter levels, OBS Studio health, and Restream broadcast status in configurable displays for the stage, green room, audio booth, and production team.
 
+> **Producer-platform beta:** The `beta/producer-platform` branch adds organization accounts and roles, campuses, Planning Center position checklists and resources, completion/activity tracking, portable dashboard layouts, a reorganized editor, HTTPS, and mobile layouts. See the [Producer workspace beta guide](docs/PRODUCER.md).
+
 ## Watch the setup and demo video
 
 See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard setup and demo video](https://youtu.be/pE_uWD24G2c)**.
@@ -32,6 +34,8 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 - OBS Studio streaming/recording state, connection health, output statistics, dropped-frame warnings, and an optional preview image
 - Planning Center Services LIVE control buttons
 - A WYSIWYG dashboard editor with independent layouts and color-matched liquid-glass widgets for each destination
+- Exportable/importable dashboard layout files and a categorized widget palette with right-click editing actions
+- A mobile-friendly producer workspace for position checklists, files, links, team access, campuses, and an activity trail *(producer-platform beta)*
 
 ![ChurchBoard audio-board dashboard](docs/screenshots/audio-board.jpg)
 
@@ -128,4 +132,4 @@ See [Development and release builds](docs/DEVELOPMENT.md) for platform build com
 
 ## Security
 
-Planning Center credentials remain in the local ChurchBoard data directory and are excluded from Git. ChurchBoard is intended for a trusted production LAN and does not yet provide its own login screen or TLS termination. Read [SECURITY.md](SECURITY.md) before exposing it beyond that network.
+Planning Center credentials remain in the local ChurchBoard data directory and are excluded from Git. The producer-platform beta provides local accounts, role-based access, secure session cookies, and direct HTTPS certificate support. Keep ChurchBoard on a trusted production network and read [SECURITY.md](SECURITY.md) before allowing remote access.

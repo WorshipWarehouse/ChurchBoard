@@ -18,6 +18,15 @@ from app.store import ConfigStore
 
 
 class StoreTests(unittest.TestCase):
+    def test_store_migrates_producer_platform_collections(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "churchboard.json")
+            data = store.load()
+            self.assertEqual(data["version"], 2)
+            self.assertFalse(data["organization"]["auth_enabled"])
+            self.assertEqual(data["organization"]["campuses"][0]["id"], "main")
+            self.assertEqual(data["producer"]["checklist_templates"], [])
+
     def test_new_store_contains_destination_dashboards(self):
         with tempfile.TemporaryDirectory() as directory:
             store = ConfigStore(Path(directory) / "state.json")

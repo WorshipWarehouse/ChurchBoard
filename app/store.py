@@ -27,7 +27,7 @@ def default_data() -> dict[str, Any]:
     next(widget for widget in audio_widgets if widget["id"] == "assignments")["settings"]["display_mode"] = "technical"
     audio_widgets.append({"id": "osm", "type": "spl", "x": 7, "y": 8, "w": 5, "h": 3, "title": "Open Sound Meter", "settings": {"green_max": 75, "orange_max": 85, "reports_enabled": True}})
     return {
-        "version": 1,
+        "version": 2,
         "settings": {
             "organization_name": "My Church",
             "timezone": "America/New_York",
@@ -73,6 +73,18 @@ def default_data() -> dict[str, Any]:
             {"id": "green-room", "name": "Green Room", "slug": "green-room", "background_color": "#0a0d12", "columns": 12, "row_height": 72, "widgets": green_room_widgets},
             {"id": "audio", "name": "Audio Board", "slug": "audio", "background_color": "#0a0d12", "columns": 12, "row_height": 72, "widgets": audio_widgets},
         ],
+        "organization": {
+            "auth_enabled": False,
+            "campuses": [{"id": "main", "name": "Main Campus"}],
+        },
+        "users": [],
+        "invitations": [],
+        "producer": {
+            "checklist_templates": [],
+            "resources": [],
+            "completions": [],
+            "activity": [],
+        },
     }
 
 
@@ -102,6 +114,21 @@ class ConfigStore:
                 **default_data()["settings"]["planning_center"]["live_from_propresenter"],
                 **(raw.get("settings", {}).get("planning_center", {}).get("live_from_propresenter") or {}),
             }
+            baseline["organization"] = {
+                **default_data()["organization"],
+                **(raw.get("organization") or {}),
+            }
+            baseline["organization"]["campuses"] = list(
+                baseline["organization"].get("campuses") or default_data()["organization"]["campuses"]
+            )
+            baseline["users"] = list(raw.get("users") or [])
+            baseline["invitations"] = list(raw.get("invitations") or [])
+            baseline["producer"] = {
+                **default_data()["producer"],
+                **(raw.get("producer") or {}),
+            }
+            for key in ("checklist_templates", "resources", "completions", "activity"):
+                baseline["producer"][key] = list(baseline["producer"].get(key) or [])
             for dashboard in baseline.get("dashboards", []):
                 dashboard.pop("theme", None)
                 if dashboard.get("id") == "audio" and not any(widget.get("type") == "spl" for widget in dashboard.get("widgets", [])):

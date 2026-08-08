@@ -88,6 +88,57 @@ class ApiTests(unittest.TestCase):
         stopped = self.client.post("/api/desktop/quit")
         self.assertEqual(stopped.status_code, 409)
 
+    def test_producer_bootstrap_roles_checklists_and_completion(self):
+        redirect = self.client.get("/producer", follow_redirects=False)
+        self.assertEqual(redirect.status_code, 303)
+        owner = self.client.post("/api/auth/bootstrap", json={
+            "name": "Producer Owner", "email": "owner@example.test", "password": "a strong beta password",
+        })
+        self.assertEqual(owner.status_code, 200)
+        self.assertEqual(owner.json()["role"], "admin")
+        self.assertNotIn("password_hash", owner.json())
+        self.assertEqual(self.client.get("/producer").status_code, 200)
+        created = self.client.post("/api/producer/templates", json={"data": {
+            "title": "Audio pre-service", "position_keys": ["production::audio"],
+            "tasks": [{"title": "Turn on console", "required": True}, {"title": "Save backup", "required": False}],
+        }})
+        self.assertEqual(created.status_code, 201)
+        template = created.json()
+        context = self.client.get("/api/producer/context").json()
+        self.assertEqual(context["templates"][0]["title"], "Audio pre-service")
+        completion = self.client.put("/api/producer/completions", json={"data": {
+            "service_id": "demo", "template_id": template["id"], "task_id": template["tasks"][0]["id"],
+            "person_id": "person-1", "position_key": "production::audio", "completed": True,
+        }})
+        self.assertEqual(completion.status_code, 200)
+        self.assertTrue(completion.json()["completed"])
+        user = self.client.post("/api/users", json={
+            "name": "Volunteer", "email": "volunteer@example.test", "password": "temporary password", "role": "volunteer",
+            "campus_ids": ["main"], "planning_center_person_id": "person-1",
+        })
+        self.assertEqual(user.status_code, 201)
+
+    def test_dashboard_layout_export_and_import_renames_collision(self):
+        exported = self.client.get("/api/layouts/main/export")
+        self.assertEqual(exported.status_code, 200)
+        self.assertIn("churchboard-main.json", exported.headers["content-disposition"])
+        imported = self.client.post("/api/layouts/import", json=exported.json())
+        self.assertEqual(imported.status_code, 200)
+        self.assertEqual(imported.json()["items"][0]["slug"], "main-2")
+        self.assertEqual(imported.json()["items"][0]["name"], "Main (imported)")
+
+    def test_uploaded_position_resource_is_downloadable(self):
+        resource = self.client.post("/api/producer/resources", json={"data": {
+            "title": "Audio guide", "kind": "file", "position_keys": ["production::audio"],
+        }}).json()
+        uploaded = self.client.put(
+            f"/api/producer/resources/{resource['id']}/content?filename=guide.pdf",
+            content=b"sample-pdf", headers={"Content-Type": "application/pdf"},
+        )
+        self.assertEqual(uploaded.status_code, 200)
+        downloaded = self.client.get(f"/api/producer/resources/{resource['id']}/content")
+        self.assertEqual(downloaded.content, b"sample-pdf")
+
     def test_timezone_catalog_contains_standard_choices(self):
         response = self.client.get("/api/timezones")
         self.assertEqual(response.status_code, 200)

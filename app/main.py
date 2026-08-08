@@ -6,20 +6,24 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import ipaddress
 import json
+import re
 import secrets
 import threading
+from pathlib import Path
 from uuid import uuid4
 from zoneinfo import available_timezones
 
 import uvicorn
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.config import ROOT_DIR, load_config
+from app.auth import AuthManager, password_hash, public_user, require_role, require_user
 from app.models import Dashboard, SettingsUpdate
+from app.producer import add_activity, producer_context, save_resource, save_template, set_completion
 from app.services.runtime import RuntimeService
 from app.services.spl_reports import SPLReportStore
 from app.services.planning_center import PlanningCenterClient
@@ -67,6 +71,29 @@ class ProPresenterNavigationRequest(BaseModel):
     widget_id: str | None = None
 
 
+class CredentialsRequest(BaseModel):
+    name: str = ""
+    email: str
+    password: str
+
+
+class UserRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "volunteer"
+    campus_ids: list[str] = ["main"]
+    planning_center_person_id: str = ""
+
+
+class CampusRequest(BaseModel):
+    name: str
+
+
+class ProducerPayload(BaseModel):
+    data: dict = {}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = load_config()
@@ -74,6 +101,7 @@ async def lifespan(app: FastAPI):
     runtime = RuntimeService(store, SPLReportStore(config.data_file.with_name("spl-samples.jsonl")))
     app.state.instance_id = uuid4().hex
     app.state.store = store
+    app.state.auth = AuthManager(store)
     app.state.runtime = runtime
     await runtime.start()
     try:
@@ -88,7 +116,19 @@ app.mount("/static", StaticFiles(directory=ROOT_DIR / "app" / "static"), name="s
 
 @app.middleware("http")
 async def prevent_stale_dashboard_assets(request: Request, call_next):
+    auth = getattr(request.app.state, "auth", None)
+    if auth is not None:
+        request.state.user = auth.current_user(request)
+        protected_page = request.url.path in {"/admin", "/producer"} or request.url.path.startswith("/editor/")
+        if request.url.path == "/producer" and not store_from(request).load().get("users"):
+            return RedirectResponse("/login?next=/producer", status_code=303)
+        if protected_page and auth.enabled() and not request.state.user:
+            return RedirectResponse(f"/login?next={request.url.path}", status_code=303)
     response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "same-origin"
+    if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
     if request.url.path.startswith("/static/") or request.url.path in {"/admin", "/desktop"} or request.url.path.startswith(("/display/", "/editor/")):
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -113,6 +153,16 @@ async def root() -> RedirectResponse:
 @app.get("/desktop")
 async def desktop_page() -> FileResponse:
     return FileResponse(ROOT_DIR / "app" / "static" / "desktop.html")
+
+
+@app.get("/login")
+async def login_page() -> FileResponse:
+    return FileResponse(ROOT_DIR / "app" / "static" / "login.html")
+
+
+@app.get("/producer")
+async def producer_page() -> FileResponse:
+    return FileResponse(ROOT_DIR / "app" / "static" / "producer.html")
 
 
 @app.get("/admin")
@@ -142,6 +192,7 @@ async def get_dashboard(identifier: str, request: Request) -> dict:
 
 @app.post("/api/dashboards", status_code=201)
 async def create_dashboard(payload: Dashboard, request: Request) -> dict:
+    require_role(request, "admin", "editor")
     store = store_from(request)
     data = store.load()
     if any(item["id"] == payload.id or item["slug"] == payload.slug for item in data["dashboards"]):
@@ -154,6 +205,7 @@ async def create_dashboard(payload: Dashboard, request: Request) -> dict:
 
 @app.put("/api/dashboards/{identifier}")
 async def update_dashboard(identifier: str, payload: Dashboard, request: Request) -> dict:
+    require_role(request, "admin", "editor")
     store = store_from(request)
     data = store.load()
     index = next((i for i, item in enumerate(data["dashboards"]) if item["id"] == identifier or item["slug"] == identifier), None)
@@ -168,6 +220,7 @@ async def update_dashboard(identifier: str, payload: Dashboard, request: Request
 
 @app.delete("/api/dashboards/{identifier}", status_code=204)
 async def delete_dashboard(identifier: str, request: Request) -> None:
+    require_role(request, "admin")
     store = store_from(request)
     data = store.load()
     original = len(data["dashboards"])
@@ -181,11 +234,13 @@ async def delete_dashboard(identifier: str, request: Request) -> None:
 
 @app.get("/api/settings")
 async def get_settings(request: Request) -> dict:
+    require_role(request, "admin")
     return store_from(request).public_settings()
 
 
 @app.put("/api/settings")
 async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
+    require_role(request, "admin")
     store = store_from(request)
     data = store.load()
     settings = payload.model_dump()
@@ -202,6 +257,192 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     store.save(data)
     await request.app.state.runtime.refresh(force=True)
     return store.public_settings()
+
+
+@app.get("/api/auth/status")
+async def auth_status(request: Request) -> dict:
+    auth: AuthManager = request.app.state.auth
+    return {"enabled": auth.enabled(), "requires_setup": not bool(store_from(request).load().get("users")), "user": auth.current_user(request)}
+
+
+@app.post("/api/auth/bootstrap")
+async def bootstrap_auth(payload: CredentialsRequest, request: Request, response: Response) -> dict:
+    secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    return request.app.state.auth.bootstrap(payload.name, payload.email, payload.password, response, secure)
+
+
+@app.post("/api/auth/login")
+async def login_auth(payload: CredentialsRequest, request: Request, response: Response) -> dict:
+    secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    return request.app.state.auth.login(payload.email, payload.password, response, secure)
+
+
+@app.post("/api/auth/logout")
+async def logout_auth(request: Request, response: Response) -> dict:
+    request.app.state.auth.logout(request, response)
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def auth_me(request: Request) -> dict:
+    return require_user(request)
+
+
+@app.get("/api/users")
+async def list_users(request: Request) -> dict:
+    require_role(request, "admin")
+    return {"items": [public_user(user) for user in store_from(request).load().get("users", [])]}
+
+
+@app.post("/api/users", status_code=201)
+async def create_user(payload: UserRequest, request: Request) -> dict:
+    actor = require_role(request, "admin")
+    if payload.role not in {"admin", "editor", "volunteer"}:
+        raise HTTPException(400, "Choose Admin, Editor, or Volunteer")
+    data = store_from(request).load()
+    if any(str(user.get("email") or "").casefold() == payload.email.strip().casefold() for user in data.get("users", [])):
+        raise HTTPException(409, "A user with that email already exists")
+    try:
+        encoded = password_hash(payload.password)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    user = {"id": uuid4().hex, "name": payload.name.strip(), "email": payload.email.strip().lower(), "role": payload.role, "campus_ids": payload.campus_ids or ["main"], "planning_center_person_id": payload.planning_center_person_id.strip(), "active": True, "created_at": datetime.now(timezone.utc).isoformat(), "password_hash": encoded}
+    data.setdefault("users", []).append(user)
+    add_activity(data, actor, "created user", user["name"])
+    store_from(request).save(data)
+    return public_user(user)
+
+
+@app.get("/api/campuses")
+async def list_campuses(request: Request) -> dict:
+    require_user(request)
+    return {"items": store_from(request).load().get("organization", {}).get("campuses", [])}
+
+
+@app.post("/api/campuses", status_code=201)
+async def create_campus(payload: CampusRequest, request: Request) -> dict:
+    actor = require_role(request, "admin")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(400, "Enter a campus name")
+    data = store_from(request).load()
+    campus = {"id": re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-") or uuid4().hex[:8], "name": name[:120]}
+    if any(item.get("id") == campus["id"] for item in data.get("organization", {}).get("campuses", [])):
+        raise HTTPException(409, "That campus already exists")
+    data.setdefault("organization", {}).setdefault("campuses", []).append(campus)
+    add_activity(data, actor, "created campus", campus["name"], campus["id"])
+    store_from(request).save(data)
+    return campus
+
+
+@app.get("/api/producer/context")
+async def get_producer_context(request: Request) -> dict:
+    return producer_context(store_from(request), request.app.state.runtime.state, require_user(request))
+
+
+@app.post("/api/producer/templates", status_code=201)
+async def create_checklist(payload: ProducerPayload, request: Request) -> dict:
+    return save_template(store_from(request), payload.data, require_role(request, "admin", "editor"))
+
+
+@app.put("/api/producer/templates/{template_id}")
+async def update_checklist(template_id: str, payload: ProducerPayload, request: Request) -> dict:
+    return save_template(store_from(request), payload.data, require_role(request, "admin", "editor"), template_id)
+
+
+@app.delete("/api/producer/templates/{template_id}", status_code=204)
+async def delete_checklist(template_id: str, request: Request) -> None:
+    actor = require_role(request, "admin", "editor")
+    data = store_from(request).load()
+    rows = data.setdefault("producer", {}).setdefault("checklist_templates", [])
+    existing = next((item for item in rows if item.get("id") == template_id), None)
+    if not existing:
+        raise HTTPException(404, "Checklist not found")
+    rows.remove(existing)
+    add_activity(data, actor, "deleted checklist", str(existing.get("title") or "Checklist"))
+    store_from(request).save(data)
+
+
+@app.post("/api/producer/resources", status_code=201)
+async def create_position_resource(payload: ProducerPayload, request: Request) -> dict:
+    return save_resource(store_from(request), payload.data, require_role(request, "admin", "editor"))
+
+
+@app.put("/api/producer/resources/{resource_id}/content")
+async def upload_position_resource(resource_id: str, request: Request, filename: str = "resource") -> dict:
+    actor = require_role(request, "admin", "editor")
+    content = await request.body()
+    if not content or len(content) > 25 * 1024 * 1024:
+        raise HTTPException(400, "Choose a file smaller than 25 MB")
+    data = store_from(request).load()
+    resource = next((item for item in data.get("producer", {}).get("resources", []) if item.get("id") == resource_id), None)
+    if not resource:
+        raise HTTPException(404, "Resource not found")
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(filename).name)[:160] or "resource"
+    directory = store_from(request).path.parent / "resources"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{resource_id}-{safe_name}"
+    path.write_bytes(content)
+    resource.update({"filename": safe_name, "content_type": request.headers.get("content-type") or "application/octet-stream", "url": f"/api/producer/resources/{resource_id}/content"})
+    add_activity(data, actor, "uploaded resource file", resource.get("title") or safe_name, resource.get("campus_id") or "main")
+    store_from(request).save(data)
+    return resource
+
+
+@app.get("/api/producer/resources/{resource_id}/content")
+async def download_position_resource(resource_id: str, request: Request) -> FileResponse:
+    require_user(request)
+    resource = next((item for item in store_from(request).load().get("producer", {}).get("resources", []) if item.get("id") == resource_id), None)
+    if not resource or not resource.get("filename"):
+        raise HTTPException(404, "Resource file not found")
+    path = store_from(request).path.parent / "resources" / f"{resource_id}-{resource['filename']}"
+    if not path.is_file():
+        raise HTTPException(404, "Resource file not found")
+    return FileResponse(path, media_type=resource.get("content_type") or None, filename=resource["filename"])
+
+
+@app.put("/api/producer/completions")
+async def update_completion(payload: ProducerPayload, request: Request) -> dict:
+    return set_completion(store_from(request), payload.data, require_user(request))
+
+
+@app.get("/api/layouts/export")
+async def export_dashboards(request: Request) -> Response:
+    require_role(request, "admin", "editor")
+    content = {"format": "churchboard-layouts", "version": 1, "exported_at": datetime.now(timezone.utc).isoformat(), "items": store_from(request).load().get("dashboards", [])}
+    return Response(json.dumps(content, indent=2), media_type="application/json", headers={"Content-Disposition": 'attachment; filename="churchboard-layouts.json"'})
+
+
+@app.get("/api/layouts/{identifier}/export")
+async def export_dashboard(identifier: str, request: Request) -> Response:
+    require_role(request, "admin", "editor")
+    content = {"format": "churchboard-layout", "version": 1, "exported_at": datetime.now(timezone.utc).isoformat(), "dashboard": dashboard_or_404(store_from(request), identifier)}
+    return Response(json.dumps(content, indent=2), media_type="application/json", headers={"Content-Disposition": f'attachment; filename="churchboard-{identifier}.json"'})
+
+
+@app.post("/api/layouts/import")
+async def import_dashboards(request: Request) -> dict:
+    require_role(request, "admin", "editor")
+    payload = await request.json()
+    incoming = payload.get("items") if payload.get("format") == "churchboard-layouts" else [payload.get("dashboard")]
+    if not incoming or any(not isinstance(item, dict) for item in incoming):
+        raise HTTPException(400, "This is not a ChurchBoard layout backup")
+    data = store_from(request).load()
+    imported = []
+    for raw in incoming:
+        candidate = Dashboard.model_validate(raw).model_dump()
+        original_slug = candidate["slug"]
+        number = 2
+        while any(item.get("slug") == candidate["slug"] or item.get("id") == candidate["id"] for item in data["dashboards"]):
+            candidate["slug"] = f"{original_slug}-{number}"
+            candidate["id"] = candidate["slug"]
+            number += 1
+        if candidate["slug"] != original_slug:
+            candidate["name"] = f"{candidate['name']} (imported)"
+        data["dashboards"].append(candidate)
+        imported.append(candidate)
+    store_from(request).save(data)
+    return {"items": imported, "count": len(imported)}
 
 
 @app.get("/api/runtime")
@@ -336,11 +577,13 @@ async def list_timezones() -> dict:
 
 @app.post("/api/runtime/refresh")
 async def refresh_runtime(request: Request) -> dict:
+    require_user(request)
     return await request.app.state.runtime.refresh(force=True)
 
 
 @app.put("/api/active-plan")
 async def select_active_plan(payload: ActivePlanRequest, request: Request) -> dict:
+    require_role(request, "admin", "editor")
     store = store_from(request)
     data = store.load()
     data["settings"]["manual_plan"] = (
@@ -354,6 +597,7 @@ async def select_active_plan(payload: ActivePlanRequest, request: Request) -> di
 
 @app.post("/api/service-control/{action}")
 async def service_control(action: str, request: Request) -> dict:
+    require_role(request, "admin", "editor")
     try:
         return await request.app.state.runtime.service_control(action)
     except ValueError as exc:
@@ -429,6 +673,7 @@ async def restream_callback(request: Request, code: str = "", state: str = "") -
 
 @app.get("/api/integrations/planning-center/catalog")
 async def planning_center_catalog(request: Request) -> dict:
+    require_user(request)
     app_settings = store_from(request).load()["settings"]
     if app_settings.get("demo_mode"):
         teams = [
@@ -560,4 +805,4 @@ async def propresenter_trigger_active_playlist_item(payload: ProPresenterSlideTr
 
 def run() -> None:
     config = load_config()
-    uvicorn.run("app.main:app", host=config.host, port=config.port, reload=False)
+    uvicorn.run("app.main:app", host=config.host, port=config.port, reload=False, ssl_certfile=str(config.ssl_certfile) if config.ssl_certfile else None, ssl_keyfile=str(config.ssl_keyfile) if config.ssl_keyfile else None)
