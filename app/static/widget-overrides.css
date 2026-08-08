@@ -1,0 +1,110 @@
+/* Final widget presentation overrides. Keep this stylesheet loaded after style.css. */
+.editor-grid .widget .widget-settings-button {
+  position: absolute !important;
+  z-index: 500 !important;
+  top: 9px !important;
+  right: 9px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  min-width: 58px !important;
+  height: 32px !important;
+  padding: 0 12px !important;
+  border: 1px solid #93c5fd !important;
+  border-radius: 9px !important;
+  background: #12345f !important;
+  box-shadow: 0 5px 18px #0009, inset 0 1px #ffffff38 !important;
+  color: #fff !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  font-size: .72rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  text-decoration: none !important;
+  text-transform: uppercase !important;
+  letter-spacing: .06em !important;
+}
+
+.widget-settings-button:hover,
+.widget-settings-button:focus-visible {
+  border-color: #fff !important;
+  background: #2563a8 !important;
+  outline: 2px solid #60a5fa !important;
+  outline-offset: 2px !important;
+}
+
+.editor-grid .widget-heading {
+  padding-right: 82px !important;
+}
+
+.livestream-source {
+  grid-template-columns: clamp(46px, 8cqw, 66px) minmax(0, 1fr) 16px !important;
+  gap: clamp(10px, 2cqw, 18px) !important;
+  padding: clamp(12px, 2.6cqw, 22px) !important;
+  border-width: 2px !important;
+}
+
+.livestream-source.live {
+  border-color: #43e58b !important;
+  box-shadow: 0 0 0 2px #43e58b59, 0 0 24px #43e58b38 !important;
+}
+
+.livestream-provider {
+  width: clamp(46px, 8cqw, 66px) !important;
+  height: clamp(46px, 8cqw, 66px) !important;
+  font-size: clamp(1.25rem, 4cqw, 2rem) !important;
+}
+
+.livestream-source strong {
+  font-size: clamp(1.15rem, 4.5cqw, 2rem) !important;
+  line-height: 1.05 !important;
+}
+
+.livestream-source small {
+  margin-top: 3px !important;
+  font-size: clamp(.8rem, 2.8cqw, 1.15rem) !important;
+}
+
+.livestream-metrics {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px clamp(16px, 4cqw, 30px) !important;
+  margin-top: clamp(7px, 1.5cqw, 12px) !important;
+  color: var(--text) !important;
+  font-size: clamp(1.2rem, 5.5cqw, 2.4rem) !important;
+  font-weight: 850 !important;
+  line-height: 1.05 !important;
+}
+
+.livestream-metrics b,
+.livestream-metrics em {
+  color: var(--text) !important;
+  font-size: 1em !important;
+  font-style: normal !important;
+  font-weight: 850 !important;
+}
+
+.clock-value {
+  font-size: clamp(2rem, min(22cqw, 66cqh), 12rem) !important;
+}
+
+.service-name {
+  font-size: clamp(1.4rem, min(12cqw, 58cqh), 7rem) !important;
+}
+
+.timing-value {
+  font-size: clamp(1rem, min(11cqw, 48cqh), 5rem) !important;
+}
+
+.pp-timer strong {
+  font-size: clamp(1rem, min(14cqw, 24cqh), 6rem) !important;
+}
+
+@media (max-width: 700px) {
+  .editor-grid .widget .widget-settings-button {
+    min-width: 52px !important;
+    height: 30px !important;
+    padding-inline: 9px !important;
+  }
+}
