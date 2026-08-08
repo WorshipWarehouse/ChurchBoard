@@ -1009,7 +1009,7 @@ async def propresenter_trigger_active_slide(payload: ProPresenterSlideTrigger, r
     if not client.configured:
         raise HTTPException(400, "ProPresenter is not connected")
     try:
-        if payload.presentation_uuid and payload.playlist_index is not None:
+        if payload.playlist_index is not None:
             await client.trigger_playlist_slide(payload.playlist_index, payload.presentation_uuid, payload.index, payload.is_pco)
         elif payload.presentation_uuid:
             await client.trigger_presentation_slide(payload.presentation_uuid, payload.index)

@@ -265,11 +265,12 @@ class ProPresenterClient:
                 playlist_context.get("service_item_index") is not None
                 and int(item.get("index", -1)) == int(playlist_context.get("service_item_index"))
             )
-            item_details = presentation if active_row else self._playlist_presentation_details.get(item_uuid) or {}
+            item_details = presentation if active_row else self._playlist_presentation_details.get(item_uuid) or item.get("_presentation_payload") or {}
             thumbnail_uuid = presentation_uuid if active_row and presentation_uuid else item_uuid
             if active_row and presentation_uuid:
                 item["presentation_uuid"] = presentation_uuid
             entries = self._presentation_cue_entries(item_details)
+            item["slides_loaded"] = bool(item_details)
             item["slides"] = [
                 {
                     "index": position + 1,
@@ -381,7 +382,7 @@ class ProPresenterClient:
                 index = int(raw_index) if raw_index is not None else position
             except (TypeError, ValueError):
                 index = position
-            results.append({"index": index, "title": title, "presentation_uuid": identifier, "active": index == context.get("service_item_index"), "is_pco": bool(row.get("is_pco")), "type": kind, "triggerable": triggerable})
+            results.append({"index": index, "title": title, "presentation_uuid": identifier, "active": index == context.get("service_item_index"), "is_pco": bool(row.get("is_pco")), "type": kind, "triggerable": triggerable, "_presentation_payload": presentation})
         return results
 
     async def trigger_active_slide(self, index: int) -> None:
@@ -402,7 +403,7 @@ class ProPresenterClient:
 
     async def trigger_presentation_slide(self, presentation_uuid: str, index: int) -> None:
         """Trigger a cue by UUID, falling back for PCO-linked presentations."""
-        if not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid or ""):
+        if presentation_uuid and not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid):
             raise ValueError("Invalid ProPresenter presentation UUID")
         if index < 0 or index > 10000:
             raise ValueError("Invalid ProPresenter slide index")
@@ -427,12 +428,10 @@ class ProPresenterClient:
         if cue_index < 0 or cue_index > 10000:
             raise ValueError("Invalid ProPresenter slide index")
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
-        response = await self._http().get(
-            f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/{cue_index}/trigger"
-        )
-        if response.is_success:
+        response = await self._http().get(f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/{cue_index}/trigger") if presentation_uuid else None
+        if response is not None and response.is_success:
             return
-        if response.status_code not in {400, 404}:
+        if response is not None and response.status_code not in {400, 404}:
             response.raise_for_status()
         # PCO-linked items can reject their presentation UUID. Activate the
         # playlist row first, then cue its now-active presentation.
