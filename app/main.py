@@ -18,7 +18,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import ROOT_DIR, load_config
 from app.auth import AuthManager, password_hash, public_user, require_role, require_user
@@ -74,15 +74,15 @@ class ProPresenterNavigationRequest(BaseModel):
 class CredentialsRequest(BaseModel):
     name: str = ""
     email: str
-    password: str
+    password: str = ""
 
 
 class UserRequest(BaseModel):
     name: str
     email: str
-    password: str
+    password: str = ""
     role: str = "volunteer"
-    campus_ids: list[str] = ["main"]
+    campus_ids: list[str] = Field(default_factory=lambda: ["main"])
     planning_center_person_id: str = ""
 
 
@@ -90,8 +90,17 @@ class CampusRequest(BaseModel):
     name: str
 
 
+class OrganizationAuthRequest(BaseModel):
+    passwords_required: bool = True
+
+
+class AdminRecoveryRequest(BaseModel):
+    email: str
+    password: str
+
+
 class ProducerPayload(BaseModel):
-    data: dict = {}
+    data: dict = Field(default_factory=dict)
 
 
 @asynccontextmanager
@@ -262,7 +271,15 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
 @app.get("/api/auth/status")
 async def auth_status(request: Request) -> dict:
     auth: AuthManager = request.app.state.auth
-    return {"enabled": auth.enabled(), "requires_setup": not bool(store_from(request).load().get("users")), "user": auth.current_user(request)}
+    data = store_from(request).load()
+    passwordless = not bool(data.get("organization", {}).get("passwords_required", True))
+    return {
+        "enabled": auth.enabled(),
+        "requires_setup": not bool(data.get("users")),
+        "passwords_required": not passwordless,
+        "users": [{"name": user.get("name"), "email": user.get("email")} for user in data.get("users", []) if user.get("active", True)] if passwordless else [],
+        "user": auth.current_user(request),
+    }
 
 
 @app.post("/api/auth/bootstrap")
@@ -300,6 +317,8 @@ async def create_user(payload: UserRequest, request: Request) -> dict:
     if payload.role not in {"admin", "editor", "volunteer"}:
         raise HTTPException(400, "Choose Admin, Editor, or Volunteer")
     data = store_from(request).load()
+    if data.get("organization", {}).get("passwords_required", True) and not payload.password:
+        raise HTTPException(400, "Enter a password, or turn off password sign-in for the organization")
     if any(str(user.get("email") or "").casefold() == payload.email.strip().casefold() for user in data.get("users", [])):
         raise HTTPException(409, "A user with that email already exists")
     try:
@@ -311,6 +330,74 @@ async def create_user(payload: UserRequest, request: Request) -> dict:
     add_activity(data, actor, "created user", user["name"])
     store_from(request).save(data)
     return public_user(user)
+
+
+@app.put("/api/users/{user_id}")
+async def update_user(user_id: str, payload: UserRequest, request: Request) -> dict:
+    actor = require_role(request, "admin")
+    data = store_from(request).load()
+    user = next((item for item in data.get("users", []) if item.get("id") == user_id), None)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if payload.role not in {"admin", "editor", "volunteer"}:
+        raise HTTPException(400, "Choose Admin, Editor, or Volunteer")
+    if data.get("organization", {}).get("passwords_required", True) and not (payload.password or user.get("password_hash")):
+        raise HTTPException(400, "Enter a password, or turn off password sign-in for the organization")
+    email = payload.email.strip().lower()
+    if any(item.get("id") != user_id and str(item.get("email") or "").casefold() == email.casefold() for item in data.get("users", [])):
+        raise HTTPException(409, "A user with that email already exists")
+    if user.get("role") == "admin" and payload.role != "admin" and sum(1 for item in data.get("users", []) if item.get("role") == "admin" and item.get("active", True)) <= 1:
+        raise HTTPException(400, "ChurchBoard must have at least one administrator")
+    user.update({"name": payload.name.strip(), "email": email, "role": payload.role, "campus_ids": payload.campus_ids or ["main"], "planning_center_person_id": payload.planning_center_person_id.strip()})
+    if payload.password:
+        user["password_hash"] = password_hash(payload.password)
+    add_activity(data, actor, "updated user", user.get("name") or email)
+    store_from(request).save(data)
+    return public_user(user)
+
+
+@app.delete("/api/users/{user_id}", status_code=204)
+async def delete_user(user_id: str, request: Request) -> None:
+    actor = require_role(request, "admin")
+    if actor.get("id") == user_id:
+        raise HTTPException(400, "You cannot delete the account you are currently using")
+    data = store_from(request).load()
+    user = next((item for item in data.get("users", []) if item.get("id") == user_id), None)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user.get("role") == "admin" and sum(1 for item in data.get("users", []) if item.get("role") == "admin" and item.get("active", True)) <= 1:
+        raise HTTPException(400, "ChurchBoard must have at least one administrator")
+    data["users"].remove(user)
+    add_activity(data, actor, "deleted user", user.get("name") or user.get("email") or "User")
+    store_from(request).save(data)
+
+
+@app.put("/api/organization/auth")
+async def update_organization_auth(payload: OrganizationAuthRequest, request: Request) -> dict:
+    actor = require_role(request, "admin")
+    data = store_from(request).load()
+    data.setdefault("organization", {})["passwords_required"] = payload.passwords_required
+    if payload.passwords_required and any(not user.get("password_hash") for user in data.get("users", [])):
+        raise HTTPException(400, "Set passwords for every user before requiring passwords")
+    add_activity(data, actor, "enabled passwords" if payload.passwords_required else "disabled passwords", "Organization sign-in")
+    store_from(request).save(data)
+    return {"passwords_required": payload.passwords_required}
+
+
+@app.put("/api/auth/recover-admin")
+async def recover_admin(payload: AdminRecoveryRequest, request: Request) -> dict:
+    require_local_desktop(request)
+    data = store_from(request).load()
+    user = next((item for item in data.get("users", []) if item.get("role") == "admin" and str(item.get("email") or "").casefold() == payload.email.strip().casefold()), None)
+    if not user:
+        raise HTTPException(404, "No administrator has that email address")
+    if not payload.password:
+        raise HTTPException(400, "Enter a new password")
+    user["password_hash"] = password_hash(payload.password)
+    data.setdefault("organization", {})["passwords_required"] = True
+    add_activity(data, {"id": "local-recovery", "name": "Local recovery"}, "reset administrator credentials", user.get("email") or "Administrator")
+    store_from(request).save(data)
+    return {"reset": True, "email": user.get("email")}
 
 
 @app.get("/api/campuses")
@@ -333,6 +420,44 @@ async def create_campus(payload: CampusRequest, request: Request) -> dict:
     add_activity(data, actor, "created campus", campus["name"], campus["id"])
     store_from(request).save(data)
     return campus
+
+
+@app.put("/api/campuses/{campus_id}")
+async def update_campus(campus_id: str, payload: CampusRequest, request: Request) -> dict:
+    actor = require_role(request, "admin")
+    data = store_from(request).load()
+    campus = next((item for item in data.get("organization", {}).get("campuses", []) if item.get("id") == campus_id), None)
+    if not campus:
+        raise HTTPException(404, "Campus not found")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(400, "Enter a campus name")
+    campus["name"] = name[:120]
+    add_activity(data, actor, "renamed campus", campus["name"], campus_id)
+    store_from(request).save(data)
+    return campus
+
+
+@app.delete("/api/campuses/{campus_id}", status_code=204)
+async def delete_campus(campus_id: str, request: Request) -> None:
+    actor = require_role(request, "admin")
+    data = store_from(request).load()
+    campuses = data.get("organization", {}).get("campuses", [])
+    campus = next((item for item in campuses if item.get("id") == campus_id), None)
+    if not campus:
+        raise HTTPException(404, "Campus not found")
+    if len(campuses) <= 1:
+        raise HTTPException(400, "ChurchBoard must have at least one campus")
+    campuses.remove(campus)
+    fallback = str(campuses[0]["id"])
+    for user in data.get("users", []):
+        user["campus_ids"] = [value for value in user.get("campus_ids", []) if value != campus_id] or [fallback]
+    for collection in ("checklist_templates", "resources"):
+        for item in data.get("producer", {}).get(collection, []):
+            if item.get("campus_id") == campus_id:
+                item["campus_id"] = fallback
+    add_activity(data, actor, "deleted campus", campus.get("name") or campus_id, fallback)
+    store_from(request).save(data)
 
 
 @app.get("/api/producer/context")
@@ -701,6 +826,27 @@ async def planning_center_catalog(request: Request) -> dict:
     except Exception as exc:
         raise HTTPException(502, f"Could not load Planning Center positions: {exc}") from exc
     return {"items": teams, "count": sum(len(team["positions"]) for team in teams)}
+
+
+@app.get("/api/integrations/planning-center/people")
+async def planning_center_people(request: Request) -> dict:
+    require_role(request, "admin")
+    app_settings = store_from(request).load()["settings"]
+    if app_settings.get("demo_mode"):
+        people = [
+            {"id": "1", "name": "Jordan Lee", "email": "jordan@example.test", "photo": "/static/demo-people/jordan-lee.jpg"},
+            {"id": "2", "name": "Morgan Reed", "email": "morgan@example.test", "photo": "/static/demo-people/morgan-reed.jpg"},
+            {"id": "3", "name": "Taylor Brooks", "email": "taylor@example.test", "photo": "/static/demo-people/taylor-brooks.jpg"},
+        ]
+        return {"items": people, "count": len(people), "demo": True}
+    client = PlanningCenterClient(app_settings.get("planning_center", {}))
+    if not client.configured:
+        raise HTTPException(400, "Connect Planning Center in Setup to match users")
+    try:
+        people = await client.people_catalog()
+    except Exception as exc:
+        raise HTTPException(502, f"Could not load Planning Center people: {exc}") from exc
+    return {"items": people, "count": len(people)}
 
 
 @app.get("/api/integrations/propresenter/thumbnail/{presentation_uuid}/{index}")

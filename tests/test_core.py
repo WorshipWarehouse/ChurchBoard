@@ -22,8 +22,9 @@ class StoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = ConfigStore(Path(directory) / "churchboard.json")
             data = store.load()
-            self.assertEqual(data["version"], 2)
+            self.assertEqual(data["version"], 3)
             self.assertFalse(data["organization"]["auth_enabled"])
+            self.assertTrue(data["organization"]["passwords_required"])
             self.assertEqual(data["organization"]["campuses"][0]["id"], "main")
             self.assertEqual(data["producer"]["checklist_templates"], [])
 

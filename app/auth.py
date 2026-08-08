@@ -20,8 +20,8 @@ PASSWORD_ITERATIONS = 310_000
 
 
 def password_hash(password: str) -> str:
-    if len(password) < 10:
-        raise ValueError("Use a password with at least 10 characters")
+    if not password:
+        return ""
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
     return f"pbkdf2_sha256${PASSWORD_ITERATIONS}${base64.urlsafe_b64encode(salt).decode()}${base64.urlsafe_b64encode(digest).decode()}"
@@ -69,6 +69,8 @@ class AuthManager:
         data = self.store.load()
         if data.get("users"):
             raise HTTPException(409, "ChurchBoard already has an administrator")
+        if not password:
+            raise HTTPException(400, "Enter an owner password; you can enable passwordless sign-in afterward")
         try:
             encoded = password_hash(password)
         except ValueError as exc:
@@ -93,11 +95,14 @@ class AuthManager:
         return public_user(user)
 
     def login(self, email: str, password: str, response: Response, secure: bool = False) -> dict[str, Any]:
+        data = self.store.load()
         user = next(
-            (item for item in self.store.load().get("users", []) if str(item.get("email") or "").lower() == email.strip().lower()),
+            (item for item in data.get("users", []) if str(item.get("email") or "").lower() == email.strip().lower()),
             None,
         )
-        if not user or not user.get("active", True) or not password_matches(password, str(user.get("password_hash") or "")):
+        passwords_required = bool(data.get("organization", {}).get("passwords_required", True))
+        invalid_password = passwords_required and not password_matches(password, str(user.get("password_hash") or "")) if user else True
+        if not user or not user.get("active", True) or invalid_password:
             raise HTTPException(401, "Incorrect email or password")
         self._start_session(str(user["id"]), response, secure)
         return public_user(user)

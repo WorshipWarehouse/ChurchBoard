@@ -12,11 +12,17 @@ Roles are intentionally simple:
 - **Editor** manages layouts, checklist definitions, resources, and the live service workflow.
 - **Volunteer** sees the work and resources for their own Planning Center person/positions and can complete assigned checklist tasks.
 
-Use a long, unique password. ChurchBoard stores a salted PBKDF2 hash, not the original password. Sessions use HTTP-only cookies and become Secure when ChurchBoard is served over HTTPS.
+The owner chooses whether ChurchBoard accounts require passwords under **Producer → Team → Sign-in security**. With passwords off, the login page is a simple account chooser; this is convenient for a physically controlled production network but provides no protection against another person on that network. With passwords on, users sign in using email and password. ChurchBoard stores a salted PBKDF2 hash, not the original password. Sessions use HTTP-only cookies and become Secure when ChurchBoard is served over HTTPS.
+
+If an administrator loses their credentials, open `/login` directly on the computer running ChurchBoard and choose **Lost administrator credentials?**. Enter the administrator email and a new password. Recovery is limited to loopback access and turns password sign-in back on.
 
 ## Campuses, users, and Planning Center positions
 
-An admin can create campuses and users from **Producer → Team**. For volunteers, enter their Planning Center person ID so ChurchBoard can scope scheduled work to that person. Assign one or more campuses to restrict access to the relevant location.
+An admin can create, edit, or delete campuses and users from **Producer → Team**. A campus represents a physical church location and scopes its users, checklists, and resources. A single-location church can keep only **Main Campus** and otherwise ignore this feature. Deleting a campus moves its assigned users and producer content to the first remaining campus.
+
+For volunteers, choose their name from the **Planning Center person** list or use **Match by name or email**. ChurchBoard stores Planning Center's internal link behind the scenes and then scopes the volunteer's work to that scheduled person. The raw person ID is no longer required in the interface.
+
+The active service chooser at the top of Producer lists all plans currently returned by the configured Planning Center service types. Select a dated plan to lock ChurchBoard to it, or choose **Automatic service selection** to use the configured open/close timing window.
 
 Checklist templates use the position keys returned by the configured Planning Center Services plan. A template can therefore follow whoever is scheduled as `Band · Vox 1`, `Production · Audio`, or another selected position instead of being tied permanently to one person.
 

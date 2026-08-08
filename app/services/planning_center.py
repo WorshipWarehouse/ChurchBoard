@@ -301,6 +301,27 @@ class PlanningCenterClient:
         candidates.sort(key=lambda plan: plan.get("starts_at") or "")
         return candidates
 
+    async def people_catalog(self) -> list[dict[str, Any]]:
+        people = []
+        offset = 0
+        while offset < 1000:
+            payload = await self._get("/people", {"order": "name", "per_page": 100, "offset": offset})
+            rows = payload.get("data", [])
+            for row in rows:
+                attrs = row.get("attributes", {})
+                name = str(attrs.get("name") or " ".join(filter(None, [attrs.get("first_name"), attrs.get("last_name")]))).strip()
+                if name:
+                    people.append({
+                        "id": str(row.get("id") or ""),
+                        "name": name,
+                        "email": str(attrs.get("email") or ""),
+                        "photo": str(attrs.get("photo_url") or attrs.get("photo_thumbnail_url") or ""),
+                    })
+            if len(rows) < 100:
+                break
+            offset += 100
+        return people
+
     def select_plan(self, candidates: list[dict[str, Any]], manual: dict[str, str] | None, now: datetime | None = None) -> dict[str, Any] | None:
         now = now or datetime.now(timezone.utc)
         if manual:

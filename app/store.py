@@ -27,7 +27,7 @@ def default_data() -> dict[str, Any]:
     next(widget for widget in audio_widgets if widget["id"] == "assignments")["settings"]["display_mode"] = "technical"
     audio_widgets.append({"id": "osm", "type": "spl", "x": 7, "y": 8, "w": 5, "h": 3, "title": "Open Sound Meter", "settings": {"green_max": 75, "orange_max": 85, "reports_enabled": True}})
     return {
-        "version": 2,
+        "version": 3,
         "settings": {
             "organization_name": "My Church",
             "timezone": "America/New_York",
@@ -75,6 +75,7 @@ def default_data() -> dict[str, Any]:
         ],
         "organization": {
             "auth_enabled": False,
+            "passwords_required": True,
             "campuses": [{"id": "main", "name": "Main Campus"}],
         },
         "users": [],

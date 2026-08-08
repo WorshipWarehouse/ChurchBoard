@@ -56,6 +56,8 @@ def producer_context(store: ConfigStore, runtime: dict[str, Any], user: dict[str
         "user": user,
         "organization": data.get("organization") or {},
         "service": service,
+        "plans": runtime.get("plans") or [],
+        "manual_plan": data.get("settings", {}).get("manual_plan"),
         "people": people,
         "templates": templates,
         "resources": resources,

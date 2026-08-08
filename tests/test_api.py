@@ -118,6 +118,57 @@ class ApiTests(unittest.TestCase):
         })
         self.assertEqual(user.status_code, 201)
 
+    def test_producer_account_admin_service_selection_and_passwordless_login(self):
+        owner = self.client.post("/api/auth/bootstrap", json={
+            "name": "Owner", "email": "owner@example.test", "password": "short",
+        })
+        self.assertEqual(owner.status_code, 200)
+        context = self.client.get("/api/producer/context").json()
+        self.assertTrue(context["plans"])
+        selected = context["plans"][0]
+        switched = self.client.put("/api/active-plan", json={"id": selected["id"], "service_type_id": selected["service_type_id"]})
+        self.assertEqual(switched.status_code, 200)
+        campus = self.client.post("/api/campuses", json={"name": "North"}).json()
+        renamed = self.client.put(f"/api/campuses/{campus['id']}", json={"name": "North Campus"})
+        self.assertEqual(renamed.json()["name"], "North Campus")
+        passwordless = self.client.put("/api/organization/auth", json={"passwords_required": False})
+        self.assertFalse(passwordless.json()["passwords_required"])
+        user = self.client.post("/api/users", json={
+            "name": "Jordan Lee", "email": "jordan@example.test", "role": "volunteer",
+            "campus_ids": [campus["id"]], "planning_center_person_id": "1",
+        }).json()
+        updated = self.client.put(f"/api/users/{user['id']}", json={
+            "name": "Jordan L.", "email": "jordan@example.test", "role": "editor",
+            "campus_ids": [campus["id"]], "planning_center_person_id": "1",
+        })
+        self.assertEqual(updated.json()["role"], "editor")
+        self.client.post("/api/auth/logout")
+        status = self.client.get("/api/auth/status").json()
+        self.assertFalse(status["passwords_required"])
+        self.assertEqual({item["email"] for item in status["users"]}, {"owner@example.test", "jordan@example.test"})
+        login = self.client.post("/api/auth/login", json={"email": "jordan@example.test"})
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()["role"], "editor")
+        self.client.post("/api/auth/logout")
+        self.client.post("/api/auth/login", json={"email": "owner@example.test"})
+        self.assertEqual(self.client.delete(f"/api/users/{user['id']}").status_code, 204)
+        self.assertEqual(self.client.delete(f"/api/campuses/{campus['id']}").status_code, 204)
+
+    def test_local_admin_recovery_reenables_password_login(self):
+        self.client.post("/api/auth/bootstrap", json={"name": "Owner", "email": "owner@example.test", "password": "old"})
+        self.client.put("/api/organization/auth", json={"passwords_required": False})
+        self.client.post("/api/auth/logout")
+        recovered = self.client.put("/api/auth/recover-admin", json={"email": "owner@example.test", "password": "new"})
+        self.assertEqual(recovered.status_code, 200)
+        status = self.client.get("/api/auth/status").json()
+        self.assertTrue(status["passwords_required"])
+        self.assertEqual(self.client.post("/api/auth/login", json={"email": "owner@example.test", "password": "new"}).status_code, 200)
+
+    def test_demo_planning_center_people_can_be_matched_by_name(self):
+        people = self.client.get("/api/integrations/planning-center/people")
+        self.assertEqual(people.status_code, 200)
+        self.assertEqual(people.json()["items"][0]["name"], "Jordan Lee")
+
     def test_dashboard_layout_export_and_import_renames_collision(self):
         exported = self.client.get("/api/layouts/main/export")
         self.assertEqual(exported.status_code, 200)
