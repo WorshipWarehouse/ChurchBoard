@@ -63,6 +63,15 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(widget["type"], "assignments")
             self.assertEqual(widget["title"], "Scheduled Positions & Mics")
 
+    def test_lighting_widget_title_migrates_to_showxpress_control(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "state.json")
+            data = store.load()
+            data["dashboards"][0]["widgets"].append({"id": "lighting", "type": "lighting", "x": 0, "y": 10, "w": 6, "h": 4, "title": "Lighting controls", "settings": {}})
+            store.save(data)
+            widget = next(item for item in store.load()["dashboards"][0]["widgets"] if item["id"] == "lighting")
+            self.assertEqual(widget["title"], "ShowXpress Control")
+
     def test_order_widget_migrates_to_current_display_mode(self):
         with tempfile.TemporaryDirectory() as directory:
             store = ConfigStore(Path(directory) / "state.json")
