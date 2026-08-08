@@ -155,7 +155,10 @@ class ConfigStore:
                     if widget.get("type") == "slides":
                         widget["settings"] = {"slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False, "show_notes": True, "show_grid": False, "allow_remote_trigger": False, **widget.get("settings", {})}
                     if widget.get("type") == "playlist":
-                        widget["settings"] = {"allow_remote_trigger": True, "keyboard_control": False, "density": "comfortable", "auto_scroll": True, "active_border_color": "#f5c400", **widget.get("settings", {})}
+                        existing_settings = widget.get("settings", {})
+                        widget["settings"] = {"allow_remote_trigger": True, "keyboard_control_default": bool(existing_settings.get("keyboard_control", False)), "density": "comfortable", "auto_scroll": True, "active_border_color": "#f5c400", **existing_settings}
+                    if widget.get("type") == "sermon_notes":
+                        widget["settings"] = {"item_title": "Message", "field_name": "Vocals", "font_scale": 100, **widget.get("settings", {})}
                     if widget.get("type") == "livestreams":
                         widget["settings"] = {"sources": [], **widget.get("settings", {})}
                     if widget.get("type") == "order":

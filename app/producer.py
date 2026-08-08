@@ -65,7 +65,7 @@ def producer_context(store: ConfigStore, runtime: dict[str, Any], user: dict[str
     })
     service_id = str(service.get("id") or "unscheduled")
     completions = [item for item in producer.get("completions", []) if str(item.get("service_id")) == service_id]
-    activity = [item for item in producer.get("activity", []) if visible_for_user(item, user)][:80]
+    activity = [item for item in producer.get("activity", []) if visible_for_user(item, user)][:80] if user.get("role") in {"admin", "editor"} else []
     return {
         "user": user,
         "organization": data.get("organization") or {},

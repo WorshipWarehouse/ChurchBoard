@@ -518,6 +518,34 @@ async def get_producer_context(request: Request) -> dict:
     return producer_context(store_from(request), request.app.state.runtime.state, require_user(request))
 
 
+@app.get("/api/producer/planning-center-media/{media_id}/content")
+async def view_planning_center_media(media_id: str, request: Request) -> Response:
+    """Proxy a resource visible to this producer so it opens inside ChurchBoard."""
+    user = require_user(request)
+    context = producer_context(store_from(request), request.app.state.runtime.state, user)
+    visible_tag_ids = {str(rule.get("tag_id") or "") for rule in context.get("media_tag_rules") or []}
+    resource = next((
+        item
+        for tag_id in visible_tag_ids
+        for item in (context.get("tagged_resources") or {}).get(tag_id, [])
+        if str(item.get("id") or "") == media_id
+    ), None)
+    if not resource or not str(resource.get("url") or "").startswith(("https://", "http://")):
+        raise HTTPException(404, "Planning Center resource not found")
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            upstream = await client.get(str(resource["url"]))
+            upstream.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(502, f"Could not open the Planning Center resource: {exc}") from exc
+    filename = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(str(resource.get("filename") or resource.get("title") or "resource")).name)[:160]
+    content_type = upstream.headers.get("content-type") or resource.get("content_type") or "application/octet-stream"
+    return Response(upstream.content, media_type=str(content_type).split(";")[0], headers={
+        "Content-Disposition": f'inline; filename="{filename or "resource"}"',
+        "Cache-Control": "private, max-age=300",
+    })
+
+
 @app.get("/api/producer/plans")
 async def get_producer_plans(request: Request) -> dict:
     require_user(request)

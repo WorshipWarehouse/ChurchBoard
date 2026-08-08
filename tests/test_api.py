@@ -242,6 +242,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("playlist_density", editor)
         self.assertIn("playlist_auto_scroll", editor)
         self.assertIn("playlist_active_border_color", editor)
+        self.assertIn("keyboard_control_default", editor)
         self.assertNotIn("playlist_keyboard_control", editor)
         self.assertNotIn("playlist_allow_remote_trigger", editor)
         display_script = self.client.get("/static/display.js").text
@@ -251,17 +252,18 @@ class ApiTests(unittest.TestCase):
         self.assertIn('role="switch"', self.client.get("/static/common.js").text)
         self.assertIn("/api/integrations/propresenter/navigate/", display_script)
         self.assertIn("keyboardStorageKey", display_script)
-        self.assertFalse(playlist["settings"]["keyboard_control"])
+        self.assertFalse(playlist["settings"]["keyboard_control_default"])
 
     def test_new_widgets_round_trip_and_editor_uses_a_settings_dialog(self):
         board = self.client.get("/api/dashboards/main").json()
         board["widgets"].extend([
             {"id": "pp-pad", "type": "pp_controls", "x": 0, "y": 14, "w": 4, "h": 3, "title": "ProPresenter controls", "settings": {"allow_remote_trigger": True}},
             {"id": "streams", "type": "livestreams", "x": 4, "y": 14, "w": 5, "h": 3, "title": "Livestream status", "settings": {"sources": [{"id": "youtube", "provider": "youtube", "label": "YouTube", "enabled": True}]}},
+            {"id": "sermon", "type": "sermon_notes", "x": 0, "y": 17, "w": 5, "h": 5, "title": "Sermon notes", "settings": {"item_title": "Message", "field_name": "Vocals", "font_scale": 115}},
         ])
         saved = self.client.put("/api/dashboards/main", json=board)
         self.assertEqual(saved.status_code, 200)
-        self.assertEqual({widget["type"] for widget in saved.json()["widgets"][-2:]}, {"pp_controls", "livestreams"})
+        self.assertEqual({widget["type"] for widget in saved.json()["widgets"][-3:]}, {"pp_controls", "livestreams", "sermon_notes"})
         editor = self.client.get("/editor/main").text
         self.assertIn('role="dialog"', editor)
         self.assertIn('id="inspector-backdrop"', editor)

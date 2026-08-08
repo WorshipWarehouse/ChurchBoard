@@ -10,7 +10,7 @@ Roles are intentionally simple:
 
 - **Admin** manages users, campuses, integrations, layouts, checklist definitions, and resources.
 - **Editor** manages layouts, checklist definitions, resources, and the live service workflow.
-- **Volunteer** sees the work and resources for their own Planning Center person/positions and can complete assigned checklist tasks.
+- **Volunteer** sees the work and resources for their own Planning Center person/positions and can complete assigned checklist tasks. The organization-wide Activity tab is shown only to admins and editors.
 
 The owner chooses whether ChurchBoard accounts require passwords under **Producer → Team → Sign-in security**. With passwords off, the login page is a simple account chooser; this is convenient for a physically controlled production network but provides no protection against another person on that network. With passwords on, users sign in using email and password. ChurchBoard stores a salted PBKDF2 hash, not the original password. Sessions use HTTP-only cookies and become Secure when ChurchBoard is served over HTTPS.
 
@@ -32,7 +32,7 @@ From **Producer → Checklists & resources**, name the checklist, choose its cam
 
 Editors can also attach a link or upload a PDF, image, video, or document and associate it with positions and a campus. Uploaded files are kept beneath ChurchBoard's local data directory. Do not upload confidential material unless the host, backups, accounts, and network are secured appropriately.
 
-ChurchBoard can also use your existing Planning Center Services Media library. In Planning Center, create a media tag group such as `Documentation`, add tags such as `Audio`, `Lights`, or `Producer`, and apply those tags to the appropriate media. In **Producer → Checklists & resources → Planning Center tagged media**, map each scheduled position to a media tag. A person scheduled for that position then sees every media item carrying that tag. One media item can be tagged for several roles without being uploaded again, and Planning Center remains the source of truth for the file and title.
+ChurchBoard can also use your existing Planning Center Services Media library. In Planning Center, create a media tag group such as `Documentation`, add tags such as `Audio`, `Lights`, or `Producer`, and apply those tags to the appropriate media. In **Producer → Checklists & resources → Planning Center tagged media**, map each scheduled position to a media tag. A person scheduled for that position then sees every media item carrying that tag. Selecting it opens an authenticated viewer inside ChurchBoard rather than redirecting to Planning Center or forcing a download. One media item can be tagged for several roles without being uploaded again, and Planning Center remains the source of truth for the file and title.
 
 The Personal Access Token user must be able to read Services Media and its tags. Prefer a dedicated ChurchBoard integration account with only the service-type and media permissions it needs. After changing tags in Planning Center, allow one runtime refresh or reopen the Producer workspace.
 
@@ -40,7 +40,7 @@ The Personal Access Token user must be able to read Services Media and its tags.
 
 Use **Export layouts** from the desktop control page to back up all dashboards, or export the open layout from its editor. **Import layout** validates the file before storing it; a conflicting slug or name is preserved by assigning the imported dashboard a new one. Treat exports as configuration files and review operational details before sharing them.
 
-The editor palette groups widgets into Service & timing, Planning Center, ProPresenter, Audio & streaming, and Content. Search filters the list. Click a widget's gear or right-click it to open its settings in a modal; the old permanent right sidebar has been removed. Drag a widget to move it, or drag its blue right edge, bottom edge, or corner to resize it. Size choices use useful labels such as compact, comfortable, and large where practical instead of raw pixels.
+The editor palette groups widgets into Service & timing, Planning Center, ProPresenter, Audio & streaming, and Content. Search filters the list. Click the always-visible **Edit** button in a widget's upper-right corner or right-click it to open settings in a modal; the old permanent right sidebar has been removed. Drag a widget to move it, or drag its blue right edge, bottom edge, or corner to resize it. Size choices use useful labels such as compact, comfortable, and large where practical instead of raw pixels.
 
 ## HTTPS
 

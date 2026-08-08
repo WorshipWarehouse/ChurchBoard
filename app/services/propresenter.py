@@ -111,13 +111,15 @@ class ProPresenterClient:
             playlist_rows = self._playlist_presentations(
                 self._playlist_items_payload, self._playlist_context(self._playlist_payload)
             )
-            presentation_uuids = tuple(
-                row["presentation_uuid"] for row in playlist_rows
-                if row.get("triggerable") and re.fullmatch(r"[A-Za-z0-9-]+", row.get("presentation_uuid") or "")
-            )
+            presentation_uuids = tuple(dict.fromkeys(
+                str(row["presentation_uuid"]) for row in playlist_rows
+                if row.get("triggerable") and row.get("presentation_uuid") and "/" not in str(row.get("presentation_uuid"))
+            ))
+            missing_details = any(uuid not in self._playlist_presentation_details for uuid in presentation_uuids)
             if presentation_uuids and (
                 presentation_uuids != self._playlist_details_key
-                or clock - self._playlist_details_refreshed >= 30.0
+                or (missing_details and clock - self._playlist_details_refreshed >= 5.0)
+                or clock - self._playlist_details_refreshed >= 10.0
             ):
                 detail_responses = await asyncio.gather(*[
                     self._http().get(f"{base}/v1/presentation/{quote(uuid, safe='')}")
@@ -259,7 +261,14 @@ class ProPresenterClient:
         })
         for item in playlist_presentations:
             item_uuid = item.get("presentation_uuid") or ""
-            item_details = presentation if item_uuid == presentation_uuid else self._playlist_presentation_details.get(item_uuid) or {}
+            active_row = bool(item.get("active")) or item_uuid == presentation_uuid or (
+                playlist_context.get("service_item_index") is not None
+                and int(item.get("index", -1)) == int(playlist_context.get("service_item_index"))
+            )
+            item_details = presentation if active_row else self._playlist_presentation_details.get(item_uuid) or {}
+            thumbnail_uuid = presentation_uuid if active_row and presentation_uuid else item_uuid
+            if active_row and presentation_uuid:
+                item["presentation_uuid"] = presentation_uuid
             entries = self._presentation_cue_entries(item_details)
             item["slides"] = [
                 {
@@ -268,8 +277,8 @@ class ProPresenterClient:
                     "notes": self._notes(entry.get("cue")),
                     "part": entry.get("part", ""),
                     "color": entry.get("color", ""),
-                    "image_url": self._thumbnail_url(item_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")),
-                    "active": item_uuid == presentation_uuid and position == current_position,
+                    "image_url": self._thumbnail_url(thumbnail_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")),
+                    "active": active_row and position == current_position,
                 }
                 for position, entry in enumerate(entries)
             ]
@@ -363,7 +372,7 @@ class ProPresenterClient:
             title = cls._presentation_title(presentation) or cls._presentation_title(row) or str(row.get("name") or "Presentation")
             presentation_info = row.get("presentation_info") if isinstance(row.get("presentation_info"), dict) else {}
             kind = str(row.get("type") or "presentation").casefold()
-            triggerable = kind == "presentation"
+            triggerable = kind not in {"playlist", "folder", "playlist_folder", "header", "placeholder"}
             identifier = (str(presentation_info.get("presentation_uuid") or "") or cls._presentation_uuid(presentation) or str(row.get("presentation_uuid") or row.get("presentation_id") or "")) if triggerable else ""
             raw_index = row.get("index")
             if raw_index is None and isinstance(row.get("id"), dict):

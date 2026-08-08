@@ -22,7 +22,7 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 - Photo-forward scheduled-position and microphone cards, including unassigned positions and a per-widget choice between one card per person or one card per position
 - Shure QLX-D/ULX-D/SLX-D and Sennheiser EW-DX battery, RF/audio, transmitter, mute, warning, and online/offline status
 - Current and next ProPresenter slides as text or slide images, with live countdown overlays and video playback progress
-- A scrollable ProPresenter playlist that shows every playlist item, placeholder, presentation, section marker, and slide thumbnail; trusted operators can trigger a presentation or individual slide from ChurchBoard
+- A scrollable ProPresenter playlist that shows every playlist item, presentation, section marker, and available slide thumbnail; missing images receive readable text fallbacks, and trusted operators can trigger a presentation or individual slide from ChurchBoard
 - Optional live-board slide controls and keyboard control for ProPresenter, with corrected current-slide thumbnails and Planning Center-linked item matching
 - A read-only ProPresenter timers widget showing each timer's current value and state
 - ProPresenter item title, part labels and colors, slide number, and notes
@@ -33,9 +33,10 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 - Restream broadcast, viewer, and destination-status monitoring through OAuth
 - OBS Studio streaming/recording state, connection health, output statistics, dropped-frame warnings, and an optional preview image
 - Planning Center Services LIVE control buttons
-- A WYSIWYG dashboard editor with independent layouts and color-matched liquid-glass widgets for each destination
-- Exportable/importable dashboard layout files and a categorized widget palette with gear/right-click modal settings and direct edge/corner resizing
-- A multi-provider livestream status widget with Facebook/YouTube channel URLs and independent BoxCast, Resi, and Restream API configuration
+- A WYSIWYG dashboard editor with an always-visible **Edit** button, right-click settings, independent layouts, and color-matched liquid-glass widgets for each destination
+- Exportable/importable dashboard layout files and a categorized widget palette with modal settings and direct edge/corner resizing
+- A multi-provider livestream status widget with green/gray state lights, per-stream elapsed time, available live-viewer counts, Facebook/YouTube channel URLs, and independent BoxCast, Resi, and Restream API configuration
+- A scrollable, resizable sermon-notes widget that selects a named note field from a Planning Center service item
 - A dedicated ProPresenter control pad for previous/next slide and previous/next playlist item
 - A mobile-friendly producer workspace for position checklists, files, links, team access, campuses, and an activity trail *(producer-platform beta)*
 
@@ -97,7 +98,7 @@ Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Pla
 
 ## Dashboard editing
 
-Each dashboard has a stable URL. Add widgets from the palette, drag them on the canvas, and resize from the blue right edge, bottom edge, or corner. A gear or right-click opens modal settings, leaving the full editor width for the board. Every widget title can be hidden. Scheduled-position widgets can consolidate multiple roles into one card per person or retain one card per position. The ProPresenter playlist widget shows the focused playlist as a continuous, automatically scrolling list, including placeholders and all presentation slides; choose compact, comfortable, or large density and an active-slide border color. An optional per-board keyboard mode sends Left/Up to the previous ProPresenter cue and Right/Down/Space to the next cue. A separate control widget provides previous/next slide and item buttons. Order-of-service widgets can show a compact current window, a scrollable complete plan, or the complete plan fitted to the widget. Text, cards, photos, and status displays scale with their widget and stack into readable cards on narrow mobile screens. Setup can cancel a new dashboard before it is named, and the editor includes a confirmation-protected **Delete display** action. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
+Each dashboard has a stable URL. Add widgets from the palette, drag them on the canvas, and resize from the blue right edge, bottom edge, or corner. The upper-right **Edit** button or a right-click opens modal settings, leaving the full editor width for the board. Every widget title can be hidden. Scheduled-position widgets can consolidate multiple roles into one card per person or retain one card per position. The ProPresenter playlist widget shows the focused playlist as a continuous, automatically scrolling list; choose compact, comfortable, or large density, an active-slide border color, and whether slide controls and keyboard control start enabled on that board. A separate control widget provides previous/next slide and item buttons. Order-of-service widgets can show a compact current window, a scrollable complete plan, or the complete plan fitted to the widget. Text, cards, photos, timers, and status displays scale with their widget and stack into readable cards on narrow mobile screens. Setup can cancel a new dashboard before it is named, and the editor includes a confirmation-protected **Delete display** action. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
 
 ![ChurchBoard WYSIWYG dashboard editor](docs/screenshots/dashboard-editor.jpg)
 

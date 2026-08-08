@@ -375,7 +375,7 @@ class RuntimeService:
         streams_due = clock - self._last_refresh["streams"] >= 15.0
         if stream_sources and (force or streams_due):
             self._last_refresh["streams"] = clock
-            next_state["livestreams"] = await self._livestream_statuses(stream_sources, next_state.get("restream") or {})
+            next_state["livestreams"] = await self._livestream_statuses(stream_sources, next_state.get("restream") or {}, next_state.get("livestreams") or [])
         elif not stream_sources:
             next_state["livestreams"] = []
         self._apply_assignments(next_state, config.get("position_mic_map", {}))
@@ -972,8 +972,46 @@ class RuntimeService:
         return False
 
     @staticmethod
-    async def _livestream_statuses(sources: list[dict[str, Any]], restream: dict[str, Any]) -> list[dict[str, Any]]:
+    def _payload_value(payload: Any, names: set[str]) -> Any:
+        wanted = {re.sub(r"[^a-z]", "", name.casefold()) for name in names}
+        if isinstance(payload, dict):
+            for key, value in payload.items():
+                if re.sub(r"[^a-z]", "", str(key).casefold()) in wanted and value not in (None, ""):
+                    return value
+            for value in payload.values():
+                found = RuntimeService._payload_value(value, names)
+                if found not in (None, ""):
+                    return found
+        elif isinstance(payload, list):
+            for value in payload:
+                found = RuntimeService._payload_value(value, names)
+                if found not in (None, ""):
+                    return found
+        return None
+
+    @staticmethod
+    def _stream_result(result: dict[str, Any], payload: Any, previous: dict[str, Any] | None = None) -> dict[str, Any]:
+        live = bool(result.get("live"))
+        started = RuntimeService._payload_value(payload, {"actualStartTime", "started_at", "start_time", "startedAt", "live_started_at"})
+        viewers = RuntimeService._payload_value(payload, {"currentViewers", "concurrentViewers", "current_viewers", "live_viewers", "viewers"})
+        duration = RuntimeService._payload_value(payload, {"duration_seconds", "elapsed_seconds", "live_duration"})
+        if live and not started and previous and previous.get("live"):
+            started = previous.get("started_at")
+        if live and not started:
+            started = datetime.now(timezone.utc).isoformat()
+        if live and not duration and started:
+            parsed = parse_time(str(started))
+            duration = max(0, int((datetime.now(timezone.utc) - parsed).total_seconds())) if parsed else 0
+        try: viewers = int(viewers) if viewers not in (None, "") else None
+        except (TypeError, ValueError): viewers = None
+        try: duration = max(0, int(float(duration or 0)))
+        except (TypeError, ValueError): duration = 0
+        return {**result, "started_at": str(started or "") if live else "", "duration_seconds": duration if live else 0, "viewers": viewers}
+
+    @staticmethod
+    async def _livestream_statuses(sources: list[dict[str, Any]], restream: dict[str, Any], previous: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
         destinations = restream.get("destinations") or []
+        previous_by_id = {str(item.get("id") or item.get("provider") or ""): item for item in (previous or [])}
         async with httpx.AsyncClient(timeout=4, follow_redirects=True, headers={"User-Agent": "ChurchBoard livestream monitor"}) as client:
             async def check(source: dict[str, Any]) -> dict[str, Any]:
                 provider = str(source.get("provider") or "custom").casefold()
@@ -988,7 +1026,8 @@ class RuntimeService:
                         live = str(restream.get("status") or "").casefold() in {"live", "online", "healthy", "streaming"} or any(
                             str(row.get("status") or "").casefold() in {"live", "online", "healthy", "streaming"} for row in destinations
                         )
-                        return {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": bool(restream.get("connected"))}
+                        result = {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": bool(restream.get("connected"))}
+                        return RuntimeService._stream_result(result, restream, previous_by_id.get(str(public.get("id") or provider)))
                     if provider == "youtube" and token and channel_url:
                         channel_id_match = re.search(r"youtube\.com/channel/(UC[\w-]+)", channel_url, re.I)
                         channel_id = channel_id_match.group(1) if channel_id_match else ""
@@ -999,8 +1038,16 @@ class RuntimeService:
                         if channel_id:
                             response = await client.get("https://www.googleapis.com/youtube/v3/search", params={"part": "snippet", "channelId": channel_id, "eventType": "live", "type": "video", "maxResults": 1, "key": token})
                             response.raise_for_status()
-                            live = bool((response.json() or {}).get("items"))
-                            return {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                            search_items = (response.json() or {}).get("items") or []
+                            live = bool(search_items)
+                            details: Any = {}
+                            if live:
+                                video_id = str(((search_items[0].get("id") or {}).get("videoId") or ""))
+                                if video_id:
+                                    detail_response = await client.get("https://www.googleapis.com/youtube/v3/videos", params={"part": "liveStreamingDetails", "id": video_id, "key": token})
+                                    if detail_response.is_success: details = detail_response.json()
+                            result = {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                            return RuntimeService._stream_result(result, details, previous_by_id.get(str(public.get("id") or provider)))
                     if api_url:
                         headers = {"Authorization": f"Bearer {token}"} if token else None
                         response = await client.get(api_url, headers=headers)
@@ -1010,7 +1057,8 @@ class RuntimeService:
                         except ValueError:
                             payload = response.text
                         live = RuntimeService._payload_is_live(payload, keyword)
-                        return {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                        result = {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                        return RuntimeService._stream_result(result, payload, previous_by_id.get(str(public.get("id") or provider)))
                     if provider in {"facebook", "youtube"} and channel_url:
                         live_url = channel_url.rstrip("/")
                         if provider == "youtube" and "/watch" not in live_url:
@@ -1028,7 +1076,8 @@ class RuntimeService:
                             or '"is_live_streaming":true' in compact
                             or '"broadcast_status":"live"' in compact
                         )
-                        return {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                        result = {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                        return RuntimeService._stream_result(result, response.text, previous_by_id.get(str(public.get("id") or provider)))
                     return {**public, "label": label, "live": False, "status": "not configured", "checked": False}
                 except Exception as exc:
                     return {**public, "label": label, "live": False, "status": "unreachable", "checked": True, "error": str(exc)}
@@ -1045,7 +1094,7 @@ class RuntimeService:
             {"id": "service-header", "title": "Service", "item_type": "header", "length": 0, "starts_after": 0, "notes": []},
             {"id": "1", "title": "Welcome", "length": 180, "starts_after": 0, "notes": [], "leader": "Morgan Reed"},
             {"id": "2", "title": "Worship", "length": 1200, "starts_after": 180, "notes": [], "leader": "Jordan Lee"},
-            {"id": "3", "title": "Message", "length": 2100, "starts_after": 1380, "notes": []},
+            {"id": "3", "title": "Message", "length": 2100, "starts_after": 1380, "notes": ["Testing"], "note_fields": [{"name": "Vocals", "content": "Testing sermon notes from Planning Center."}]},
             {"id": "4", "title": "Closing", "length": 300, "starts_after": 3480, "notes": []},
         ]
         now = now or datetime.now(timezone.utc)

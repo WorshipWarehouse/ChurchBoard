@@ -29,7 +29,7 @@ The service-type name and ID are saved together. If Planning Center temporarily 
 ## 2. Choose positions for a widget
 
 1. From Setup, choose **Edit** for a dashboard.
-2. Click the gear on a **Scheduled Positions & Mics** widget.
+2. Click **Edit** in the upper-right corner of a **Scheduled Positions & Mics** widget (or right-click it).
 3. In the settings dialog, check the teams/categories to include, such as Band or Production.
 4. Check the individual Planning Center positions to display.
 5. Under **Cards represent**, choose **One card per person** or **One card per position**.
@@ -48,7 +48,11 @@ Producer resources can come directly from Planning Center Services Media:
 4. In ChurchBoard, open **Producer → Checklists & resources**.
 5. Under **Planning Center tagged media**, choose a scheduled position and its corresponding media tag, then save.
 
-ChurchBoard shows all media carrying that tag to the person scheduled in the mapped position. The Planning Center PAT account must have access to those Services Media items.
+ChurchBoard shows all media carrying that tag to the person scheduled in the mapped position. Files open in an authenticated viewer inside ChurchBoard rather than redirecting the user to Planning Center. The Planning Center PAT account must have access to those Services Media items.
+
+### Planning Center sermon notes
+
+Add **Sermon notes** from the Planning Center widget group. In its settings, choose the plan item (for example, **Message**), the named Planning Center note field (for example, **Vocals**), and a starting text size. The notes are scrollable by touch, mouse, keyboard, or the large up/down buttons and remain readable as the widget is resized.
 
 ## 3. Add Shure microphones
 
@@ -93,7 +97,7 @@ In a ProPresenter widget, choose:
 - whether to show `Slide x of y`;
 - item/playlist title and current/next part labels.
 
-Part labels use their ProPresenter colors. Slide notes appear when enabled, and widget typography scales to keep long content visible.
+Part labels use their ProPresenter colors. Slide notes and countdown timers scale with the widget to keep content visible, including short widgets. The Playlist widget also lets each board define whether slide controls and arrow-key/spacebar control start enabled; an operator can still change those switches on the live board.
 
 ## 6. Let ProPresenter drive Services LIVE
 
@@ -162,7 +166,7 @@ Restream monitoring shows whether a broadcast is live or upcoming, its elapsed t
 
 ChurchBoard stores the client secret and OAuth tokens only in its local settings. Encoder bitrate and health are not exposed by the Restream public API, so ChurchBoard labels those values unavailable instead of estimating them. See [Restream setup](RESTREAM.md).
 
-For a compact multi-destination view, add **Livestream status** from the Audio & streaming palette and open its gear menu. Each provider is configured independently:
+For a compact multi-destination view, add **Livestream status** from the Audio & streaming palette and choose **Edit**. Every provider uses a green light while live/streaming and a gray light otherwise. A running elapsed timer is shown for each live source, along with its current viewer count when the provider API exposes one. Each provider is configured independently:
 
 - **Facebook:** enter the church Page/channel URL. A public-page check is available; an API status endpoint and token are optional for more reliable monitoring.
 - **YouTube:** enter the channel URL or handle URL. Optionally add a YouTube Data API key so ChurchBoard can use the official live-search API.

@@ -305,6 +305,9 @@ class PlanningCenterClient:
                 "description": str(attachment_attrs.get("display_name") or attrs.get("media_type_name") or ""),
                 "kind": str(attachment_attrs.get("filetype") or attrs.get("media_type") or "media"),
                 "url": url,
+                "inline_url": f"/api/producer/planning-center-media/{row.get('id')}/content",
+                "filename": str(attachment_attrs.get("display_name") or attrs.get("title") or "Planning Center media"),
+                "content_type": str(attachment_attrs.get("content_type") or attachment_attrs.get("content_type_name") or ""),
                 "image_url": str(attrs.get("image_url") or attrs.get("thumbnail_url") or attachment_attrs.get("thumbnail_url") or ""),
                 "source": "Planning Center",
                 "tag_id": str(tag_id),
@@ -426,12 +429,17 @@ class PlanningCenterClient:
             attrs = row.get("attributes", {})
             length = int(attrs.get("length") or 0)
             notes = []
+            note_fields = []
             note_rows = []
             for rel in row.get("relationships", {}).get("item_notes", {}).get("data", []):
                 note = included.get((rel.get("type"), rel.get("id")), {}).get("attributes", {})
                 note_rows.append(note)
                 if note.get("content"):
                     notes.append(note["content"])
+                    note_fields.append({
+                        "name": str(note.get("category_name") or note.get("name") or note.get("label") or note.get("category") or "Notes"),
+                        "content": str(note.get("content") or ""),
+                    })
             item_times = []
             for rel in row.get("relationships", {}).get("item_times", {}).get("data", []):
                 item_time_row = included.get((rel.get("type"), rel.get("id")), {})
@@ -455,7 +463,7 @@ class PlanningCenterClient:
             fallback_leader = item_leader(attrs, note_rows)
             item = {
                 "id": row["id"], "title": attrs.get("title") or attrs.get("description") or "Untitled",
-                "length": length, "sequence": attrs.get("sequence", 0), "starts_after": elapsed, "notes": notes,
+                "length": length, "sequence": attrs.get("sequence", 0), "starts_after": elapsed, "notes": notes, "note_fields": note_fields,
                 "item_type": attrs.get("item_type") or "item", "key_name": attrs.get("key_name") or "",
                 "leader": ", ".join(dict.fromkeys(assigned_leaders)) or fallback_leader,
                 "leader_person_ids": list(dict.fromkeys(leader_person_ids)),

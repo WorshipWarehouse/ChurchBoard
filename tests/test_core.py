@@ -258,6 +258,8 @@ class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
         resources = await client.media_for_tag("tag-audio")
         self.assertEqual(resources[0]["url"], "https://example.test/audio.pdf")
         self.assertEqual(resources[0]["source"], "Planning Center")
+        self.assertEqual(resources[0]["inline_url"], "/api/producer/planning-center-media/media-1/content")
+        self.assertEqual(resources[0]["filename"], "Audio.pdf")
     async def test_catalog_groups_positions_by_team(self):
         client = PlanningCenterClient({"enabled": True, "application_id": "id", "secret": "secret", "service_type_ids": ["st-1"]})
 
@@ -303,7 +305,7 @@ class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
                     "attributes": {"title": "Song One", "item_type": "song", "length": 240, "sequence": 1},
                     "relationships": {
                         "item_assignments": {"data": [{"type": "ItemAssignment", "id": "assignment-1"}]},
-                        "item_notes": {"data": []},
+                        "item_notes": {"data": [{"type": "ItemNote", "id": "note-1"}]},
                         "item_times": {"data": []},
                     },
                 }],
@@ -311,7 +313,7 @@ class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
                     "type": "ItemAssignment",
                     "id": "assignment-1",
                     "relationships": {"assignable": {"data": {"type": "Person", "id": "person-1"}}},
-                }],
+                }, {"type": "ItemNote", "id": "note-1", "attributes": {"category_name": "Vocals", "content": "Testing"}}],
             }
 
         client._get = fake_get
@@ -319,6 +321,7 @@ class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail["people"][0]["person_id"], "person-1")
         self.assertEqual(detail["items"][0]["leader"], "Jordan Lee")
         self.assertEqual(detail["items"][0]["leader_person_ids"], ["person-1"])
+        self.assertEqual(detail["items"][0]["note_fields"], [{"name": "Vocals", "content": "Testing"}])
 
     async def test_media_by_title_returns_the_planning_center_image(self):
         client = PlanningCenterClient({"enabled": True, "application_id": "id", "secret": "secret"})
@@ -611,6 +614,15 @@ class RuntimeAssignmentTests(unittest.TestCase):
         self.assertTrue(RuntimeService._payload_is_live({"status": "broadcasting"}))
         self.assertTrue(RuntimeService._payload_is_live({"isLive": True}))
         self.assertFalse(RuntimeService._payload_is_live({"status": "scheduled", "page": "live events"}))
+
+    def test_livestream_metrics_keep_start_time_and_current_viewers(self):
+        result = RuntimeService._stream_result(
+            {"id": "youtube", "live": True, "status": "live"},
+            {"liveStreamingDetails": {"actualStartTime": "2026-08-08T12:00:00Z", "concurrentViewers": "143"}},
+        )
+        self.assertEqual(result["started_at"], "2026-08-08T12:00:00Z")
+        self.assertEqual(result["viewers"], 143)
+        self.assertGreater(result["duration_seconds"], 0)
 
     def test_propresenter_title_matching_prefers_song_and_forward_duplicate(self):
         items = [
