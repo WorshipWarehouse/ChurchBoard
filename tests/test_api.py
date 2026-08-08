@@ -234,14 +234,12 @@ class ApiTests(unittest.TestCase):
         board = self.client.get("/api/dashboards/main").json()
         playlist = next(widget for widget in board["widgets"] if widget["type"] == "playlist")
         self.assertTrue(playlist["settings"]["allow_remote_trigger"])
-        self.assertEqual(playlist["settings"]["slide_size"], 120)
-        self.assertEqual(playlist["settings"]["item_size"], 48)
-        self.assertEqual(playlist["settings"]["marker_size"], 10)
+        self.assertEqual(playlist["settings"]["density"], "comfortable")
+        self.assertTrue(playlist["settings"]["auto_scroll"])
         self.assertEqual(playlist["settings"]["active_border_color"], "#f5c400")
         editor = self.client.get("/static/editor.js").text
-        self.assertIn("playlist_slide_size", editor)
-        self.assertIn("playlist_item_size", editor)
-        self.assertIn("playlist_marker_size", editor)
+        self.assertIn("playlist_density", editor)
+        self.assertIn("playlist_auto_scroll", editor)
         self.assertIn("playlist_active_border_color", editor)
         self.assertNotIn("playlist_keyboard_control", editor)
         self.assertNotIn("playlist_allow_remote_trigger", editor)
@@ -253,6 +251,44 @@ class ApiTests(unittest.TestCase):
         self.assertIn("/api/integrations/propresenter/navigate/", display_script)
         self.assertIn("keyboardStorageKey", display_script)
         self.assertFalse(playlist["settings"]["keyboard_control"])
+
+    def test_new_widgets_round_trip_and_editor_uses_a_settings_dialog(self):
+        board = self.client.get("/api/dashboards/main").json()
+        board["widgets"].extend([
+            {"id": "pp-pad", "type": "pp_controls", "x": 0, "y": 14, "w": 4, "h": 3, "title": "ProPresenter controls", "settings": {"allow_remote_trigger": True}},
+            {"id": "streams", "type": "livestreams", "x": 4, "y": 14, "w": 5, "h": 3, "title": "Livestream status", "settings": {"sources": [{"id": "youtube", "provider": "youtube", "label": "YouTube", "enabled": True}]}},
+        ])
+        saved = self.client.put("/api/dashboards/main", json=board)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual({widget["type"] for widget in saved.json()["widgets"][-2:]}, {"pp_controls", "livestreams"})
+        editor = self.client.get("/editor/main").text
+        self.assertIn('role="dialog"', editor)
+        self.assertIn('id="inspector-backdrop"', editor)
+        script = self.client.get("/static/editor.js").text
+        self.assertIn("resize-corner", script)
+        self.assertIn("openWidgetSettings", script)
+        self.assertIn("livestream-source-editor", editor)
+
+    def test_server_settings_validate_port_and_https_files(self):
+        settings = self.client.get("/api/settings").json()
+        settings["server"] = {"port": 70000, "https_enabled": False, "ssl_certfile": "", "ssl_keyfile": ""}
+        self.assertEqual(self.client.put("/api/settings", json=settings).status_code, 400)
+        settings["server"] = {"port": 8080, "https_enabled": True, "ssl_certfile": "/missing/cert.pem", "ssl_keyfile": "/missing/key.pem"}
+        self.assertEqual(self.client.put("/api/settings", json=settings).status_code, 400)
+        settings["server"] = {"port": 8080, "https_enabled": False, "ssl_certfile": "", "ssl_keyfile": ""}
+        saved = self.client.put("/api/settings", json=settings)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["server"]["port"], 8080)
+
+    def test_producer_media_tag_rules_are_saved(self):
+        self.client.post("/api/auth/bootstrap", json={"name": "Owner", "email": "owner@example.test", "password": "beta"})
+        saved = self.client.put("/api/producer/media-tag-rules", json={"items": [{
+            "position_key": "production::audio", "tag_id": "tag-audio", "tag_label": "Documentation > Audio",
+        }]})
+        self.assertEqual(saved.status_code, 200)
+        context = self.client.get("/api/producer/context").json()
+        self.assertEqual(context["media_tag_rules"][0]["tag_id"], "tag-audio")
+        self.assertIn("tagged_resources", context)
 
     def test_runtime_and_manual_service_selection(self):
         runtime = self.client.get("/api/runtime").json()

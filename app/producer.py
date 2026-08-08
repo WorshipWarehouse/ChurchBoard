@@ -43,12 +43,26 @@ def producer_context(store: ConfigStore, runtime: dict[str, Any], user: dict[str
         person_id = str(user.get("planning_center_person_id") or "")
         user_name = str(user.get("name") or "").casefold()
         people = [person for person in people if (person_id and str(person.get("id") or "") == person_id) or str(person.get("name") or "").casefold() == user_name]
-    position_keys = {str(person.get("position_key") or "") for person in people}
+    position_keys = {
+        str(key)
+        for person in people
+        for key in (person.get("position_keys") or [person.get("position_key")])
+        if key
+    }
     templates = [item for item in producer.get("checklist_templates", []) if visible_for_user(item, user)]
     resources = [item for item in producer.get("resources", []) if visible_for_user(item, user)]
+    media_tag_rules = list(producer.get("media_tag_rules") or [])
+    tagged_resources = runtime.get("planning_center_resources") or {}
     if user.get("role") == "volunteer":
         templates = [item for item in templates if not item.get("position_keys") or position_keys.intersection(item.get("position_keys") or [])]
         resources = [item for item in resources if not item.get("position_keys") or position_keys.intersection(item.get("position_keys") or [])]
+        media_tag_rules = [item for item in media_tag_rules if str(item.get("position_key") or "") in position_keys]
+    visible_tag_ids = {str(item.get("tag_id") or "") for item in media_tag_rules if item.get("tag_id")}
+    tagged_resource_count = len({
+        str(item.get("id") or item.get("url") or item.get("title") or "")
+        for tag_id in visible_tag_ids
+        for item in tagged_resources.get(tag_id, [])
+    })
     service_id = str(service.get("id") or "unscheduled")
     completions = [item for item in producer.get("completions", []) if str(item.get("service_id")) == service_id]
     activity = [item for item in producer.get("activity", []) if visible_for_user(item, user)][:80]
@@ -61,12 +75,14 @@ def producer_context(store: ConfigStore, runtime: dict[str, Any], user: dict[str
         "people": people,
         "templates": templates,
         "resources": resources,
+        "media_tag_rules": media_tag_rules,
+        "tagged_resources": tagged_resources,
         "completions": completions,
         "activity": activity,
         "summary": {
             "positions": len(position_keys),
             "templates": len(templates),
-            "resources": len(resources),
+            "resources": len(resources) + tagged_resource_count,
             "completed": sum(1 for item in completions if item.get("completed")),
         },
     }

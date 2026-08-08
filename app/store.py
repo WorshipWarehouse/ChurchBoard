@@ -16,7 +16,7 @@ DEFAULT_WIDGETS = [
     {"id": "assignments", "type": "assignments", "x": 0, "y": 2, "w": 7, "h": 6, "title": "Scheduled Positions & Mics", "settings": {"team_ids": [], "position_keys": [], "position_labels": {}, "positions": [], "display_mode": "photos", "card_grouping": "person", "use_planning_center_icon": False, "unassigned_media_title": "Icon"}},
     {"id": "slides", "type": "slides", "x": 7, "y": 2, "w": 5, "h": 4, "title": "ProPresenter", "settings": {"show_notes": True, "slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False}},
     {"id": "order", "type": "order", "x": 7, "y": 6, "w": 5, "h": 2, "title": "Order of Service", "settings": {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False}},
-    {"id": "playlist", "type": "playlist", "x": 0, "y": 8, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "keyboard_control": False, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400"}},
+    {"id": "playlist", "type": "playlist", "x": 0, "y": 8, "w": 12, "h": 6, "title": "ProPresenter Playlist", "settings": {"allow_remote_trigger": True, "keyboard_control": False, "density": "comfortable", "auto_scroll": True, "active_border_color": "#f5c400"}},
 ]
 
 
@@ -65,6 +65,7 @@ def default_data() -> dict[str, Any]:
             },
             "restream": {"enabled": False, "client_id": "", "client_secret": "", "access_token": "", "refresh_token": "", "access_token_expires_at": 0, "refresh_seconds": 5},
             "obs": {"enabled": False, "host": "127.0.0.1", "port": 4455, "password": "", "refresh_seconds": 0.5, "dropped_frames_threshold": 2, "preview_url": ""},
+            "server": {"port": 8040, "https_enabled": False, "ssl_certfile": "", "ssl_keyfile": ""},
             "position_mic_map": {"Vox 1": "mic-1", "Vox 2": "mic-2"},
             "manual_plan": None,
         },
@@ -85,6 +86,7 @@ def default_data() -> dict[str, Any]:
             "resources": [],
             "completions": [],
             "activity": [],
+            "media_tag_rules": [],
         },
     }
 
@@ -106,7 +108,7 @@ class ConfigStore:
             baseline = default_data()
             baseline.update(raw)
             baseline["settings"] = {**default_data()["settings"], **raw.get("settings", {})}
-            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream", "obs"):
+            for section in ("planning_center", "propresenter", "shure", "sennheiser", "open_sound_meter", "restream", "obs", "server"):
                 baseline["settings"][section] = {
                     **default_data()["settings"][section],
                     **raw.get("settings", {}).get(section, {}),
@@ -128,7 +130,7 @@ class ConfigStore:
                 **default_data()["producer"],
                 **(raw.get("producer") or {}),
             }
-            for key in ("checklist_templates", "resources", "completions", "activity"):
+            for key in ("checklist_templates", "resources", "completions", "activity", "media_tag_rules"):
                 baseline["producer"][key] = list(baseline["producer"].get(key) or [])
             for dashboard in baseline.get("dashboards", []):
                 dashboard.pop("theme", None)
@@ -149,7 +151,9 @@ class ConfigStore:
                     if widget.get("type") == "slides":
                         widget["settings"] = {"slide_mode": "image", "slide_layout": "full", "show_current": True, "show_next": True, "show_parts": True, "show_slide_count": False, "show_notes": True, "show_grid": False, "allow_remote_trigger": False, **widget.get("settings", {})}
                     if widget.get("type") == "playlist":
-                        widget["settings"] = {"allow_remote_trigger": True, "keyboard_control": False, "slide_size": 120, "item_size": 48, "marker_size": 10, "active_border_color": "#f5c400", **widget.get("settings", {})}
+                        widget["settings"] = {"allow_remote_trigger": True, "keyboard_control": False, "density": "comfortable", "auto_scroll": True, "active_border_color": "#f5c400", **widget.get("settings", {})}
+                    if widget.get("type") == "livestreams":
+                        widget["settings"] = {"sources": [], **widget.get("settings", {})}
                     if widget.get("type") == "order":
                         widget["settings"] = {"display_mode": "current", "limit": 6, "show_leader": False, "show_mic": False, **widget.get("settings", {})}
                     if widget.get("type") == "spl":

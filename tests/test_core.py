@@ -237,6 +237,27 @@ class PlanningCenterTests(unittest.TestCase):
 
 
 class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
+    async def test_media_tag_catalog_and_tagged_resources(self):
+        client = PlanningCenterClient({"enabled": True, "application_id": "id", "secret": "secret"})
+
+        async def fake_get_all(path, params=None):
+            if path == "/tag_groups":
+                return {"data": [{"id": "group-1", "attributes": {"name": "Documentation", "tags_for": "media"}}]}
+            if path == "/tag_groups/group-1/tags":
+                return {"data": [{"id": "tag-audio", "attributes": {"name": "Audio"}}]}
+            self.assertEqual(path, "/media")
+            self.assertEqual(params["where[media_tag_ids][]"], "tag-audio")
+            return {
+                "data": [{"id": "media-1", "attributes": {"title": "Audio Instructions", "image_url": "https://example.test/cover.png"}, "relationships": {"attachments": {"data": [{"type": "Attachment", "id": "file-1"}]}}}],
+                "included": [{"type": "Attachment", "id": "file-1", "attributes": {"url": "https://example.test/audio.pdf", "filetype": "pdf", "display_name": "Audio.pdf"}}],
+            }
+
+        client._get_all = fake_get_all
+        groups = await client.media_tag_catalog()
+        self.assertEqual(groups[0]["tags"][0]["name"], "Audio")
+        resources = await client.media_for_tag("tag-audio")
+        self.assertEqual(resources[0]["url"], "https://example.test/audio.pdf")
+        self.assertEqual(resources[0]["source"], "Planning Center")
     async def test_catalog_groups_positions_by_team(self):
         client = PlanningCenterClient({"enabled": True, "application_id": "id", "secret": "secret", "service_type_ids": ["st-1"]})
 
@@ -576,6 +597,13 @@ class RuntimeAssignmentTests(unittest.TestCase):
             {"type": "assignments", "settings": {"use_planning_center_icon": False, "unassigned_media_title": "Disabled Logo"}},
         ]}]}
         self.assertEqual(RuntimeService._configured_media_titles(data), ["Alternate Logo", "Icon"])
+
+    def test_livestream_sources_are_collected_from_enabled_widgets(self):
+        data = {"dashboards": [{"widgets": [{"type": "livestreams", "settings": {"sources": [
+            {"id": "youtube", "provider": "youtube", "enabled": True},
+            {"id": "facebook", "provider": "facebook", "enabled": False},
+        ]}}]}]}
+        self.assertEqual([item["id"] for item in RuntimeService._configured_stream_sources(data)], ["youtube"])
 
     def test_propresenter_title_matching_prefers_song_and_forward_duplicate(self):
         items = [

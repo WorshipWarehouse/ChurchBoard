@@ -32,15 +32,19 @@ From **Producer → Checklists & resources**, name the checklist, choose its cam
 
 Editors can also attach a link or upload a PDF, image, video, or document and associate it with positions and a campus. Uploaded files are kept beneath ChurchBoard's local data directory. Do not upload confidential material unless the host, backups, accounts, and network are secured appropriately.
 
+ChurchBoard can also use your existing Planning Center Services Media library. In Planning Center, create a media tag group such as `Documentation`, add tags such as `Audio`, `Lights`, or `Producer`, and apply those tags to the appropriate media. In **Producer → Checklists & resources → Planning Center tagged media**, map each scheduled position to a media tag. A person scheduled for that position then sees every media item carrying that tag. One media item can be tagged for several roles without being uploaded again, and Planning Center remains the source of truth for the file and title.
+
+The Personal Access Token user must be able to read Services Media and its tags. Prefer a dedicated ChurchBoard integration account with only the service-type and media permissions it needs. After changing tags in Planning Center, allow one runtime refresh or reopen the Producer workspace.
+
 ## Portable layouts and widget editing
 
 Use **Export layouts** from the desktop control page to back up all dashboards, or export the open layout from its editor. **Import layout** validates the file before storing it; a conflicting slug or name is preserved by assigning the imported dashboard a new one. Treat exports as configuration files and review operational details before sharing them.
 
-The editor palette groups widgets into Service & timing, Planning Center, ProPresenter, Audio & streaming, and Content. Search filters the list. Right-click a widget on the canvas to edit, duplicate, or remove it. On a touch device, use the selected-widget inspector and action buttons.
+The editor palette groups widgets into Service & timing, Planning Center, ProPresenter, Audio & streaming, and Content. Search filters the list. Click a widget's gear or right-click it to open its settings in a modal; the old permanent right sidebar has been removed. Drag a widget to move it, or drag its blue right edge, bottom edge, or corner to resize it. Size choices use useful labels such as compact, comfortable, and large where practical instead of raw pixels.
 
 ## HTTPS
 
-Direct TLS is enabled by supplying both environment variables before ChurchBoard starts:
+Set the listening port and direct HTTPS certificate paths under **Setup → Web server**. A saved port or HTTPS change takes effect after ChurchBoard restarts. Environment variables remain available for managed installations and override the saved values:
 
 ```bash
 export CHURCHBOARD_SSL_CERTFILE=/absolute/path/to/fullchain.pem
@@ -48,11 +52,11 @@ export CHURCHBOARD_SSL_KEYFILE=/absolute/path/to/private-key.pem
 python run.py --background
 ```
 
-ChurchBoard then listens at `https://<host>:8040`. The certificate must include the hostname used by phones and tablets. A publicly trusted certificate avoids browser warnings; with an internal certificate authority, install that authority on every client. Never commit private keys. A maintained reverse proxy may terminate HTTPS instead. Authentication is not a substitute for firewalling: expose only the required port to the trusted production or staff network.
+ChurchBoard then listens at `https://<host>:8040`, or at the configured port. Port `80` is supported, although macOS and Linux normally require elevated privileges to bind ports below 1024; using a reverse proxy on ports 80/443 is usually safer. The certificate must include the hostname used by phones and tablets. A publicly trusted certificate avoids browser warnings; with an internal certificate authority, install that authority on every client. Never commit private keys. A maintained reverse proxy may terminate HTTPS instead. Authentication is not a substitute for firewalling: expose only the required port to the trusted production or staff network.
 
 ## Mobile use
 
-On the same trusted network, open `https://churchboard-hostname:8040/producer` from a phone or tablet. Producer navigation, scheduled-person cards, checklists, forms, and editor chrome collapse to touch-friendly single-column layouts. Dashboard content still follows each saved grid, so create a dedicated narrow board for a curated phone display.
+On the same trusted network, open `https://churchboard-hostname:8040/producer` from a phone or tablet. Producer navigation, scheduled-person cards, checklists, forms, and editor chrome collapse to touch-friendly layouts. Live dashboards automatically stack widgets into a single readable column on narrow screens; the editor remains usable with touch-friendly settings and scrollable layout controls.
 
 ## Beta limits
 

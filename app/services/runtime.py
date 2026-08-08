@@ -9,6 +9,8 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import httpx
+
 from app.services.planning_center import PlanningCenterClient, calculate_timing, parse_time, service_items
 from app.services.propresenter import ProPresenterClient
 from app.services.shure import ShureClient
@@ -27,7 +29,7 @@ class RuntimeService:
         self.state: dict[str, Any] = self.demo_state()
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
-        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0, "sennheiser": 0.0, "restream": 0.0, "obs": 0.0}
+        self._last_refresh = {"planning_center": 0.0, "planning_center_detail": 0.0, "planning_center_live": 0.0, "propresenter": 0.0, "shure": 0.0, "sennheiser": 0.0, "restream": 0.0, "obs": 0.0, "streams": 0.0}
         self._service_control: dict[str, Any] = {"active": False}
         self._pp_live_candidate = ""
         self._pp_live_candidate_since = 0.0
@@ -129,7 +131,10 @@ class RuntimeService:
         while not self._stop.is_set():
             await self.refresh()
             try:
-                await asyncio.wait_for(self._stop.wait(), 0.04)
+                # The fastest external source (ProPresenter) is cached at a
+                # quarter-second cadence. A 100 ms coordinator tick remains
+                # responsive without rereading settings 25 times per second.
+                await asyncio.wait_for(self._stop.wait(), 0.10)
             except asyncio.TimeoutError:
                 pass
 
@@ -155,6 +160,8 @@ class RuntimeService:
         else:
             await self._osm_listener.close()
         configured_media_titles = self._configured_media_titles(stored_data)
+        configured_resource_tags = self._configured_resource_tags(stored_data)
+        configured_stream_sources = self._configured_stream_sources(stored_data)
         if config.get("demo_mode"):
             demo = deepcopy(self.state) if self.state.get("service", {}).get("id") == "demo" else self.demo_state()
             demo["organization_name"] = config.get("organization_name", "My Church")
@@ -164,6 +171,7 @@ class RuntimeService:
             demo["manual_plan"] = config.get("manual_plan")
             demo["planning_center_live"] = {"enabled": bool((config.get("planning_center", {}).get("live_from_propresenter") or {}).get("enabled")), "state": "demo", "message": "Services LIVE automation is available when demonstration data is off"}
             demo["restream"] = {"connected": False, "status": "offline", "title": "Restream monitoring is unavailable in demo mode", "destinations": []}
+            demo["livestreams"] = [{**source, "label": source.get("label") or str(source.get("provider") or "Stream").title(), "live": False, "status": "demo", "checked": False} for source in configured_stream_sources]
             self._apply_service_control(demo)
             self.state = demo
             return self.state
@@ -274,6 +282,13 @@ class RuntimeService:
                     "icon": media_by_title.get("icon"),
                     "error": "; ".join(media_errors),
                 }
+                tagged_resources = {}
+                for tag_id in configured_resource_tags:
+                    try:
+                        tagged_resources[tag_id] = await pc.media_for_tag(tag_id)
+                    except Exception as media_exc:
+                        media_errors.append(f"tag {tag_id}: {media_exc}")
+                next_state["planning_center_resources"] = tagged_resources
             except Exception as exc:
                 next_state["planning_center"] = {"connected": False, "error": str(exc)}
         elif pc.configured and detail_due and (next_state.get("service") or {}).get("id"):
@@ -355,6 +370,13 @@ class RuntimeService:
                 next_state["obs"] = {"connected": False, "streaming": False, "recording": False, "alert": "OBS unavailable", "error": str(exc), "sources": []}
         elif not self._obs_client.configured:
             next_state["obs"] = {"connected": False, "streaming": False, "recording": False, "alert": "", "sources": []}
+        stream_sources = configured_stream_sources
+        streams_due = clock - self._last_refresh["streams"] >= 15.0
+        if stream_sources and (force or streams_due):
+            self._last_refresh["streams"] = clock
+            next_state["livestreams"] = await self._livestream_statuses(stream_sources, next_state.get("restream") or {})
+        elif not stream_sources:
+            next_state["livestreams"] = []
         self._apply_assignments(next_state, config.get("position_mic_map", {}))
         self._apply_service_control(next_state)
         self.state = next_state
@@ -898,6 +920,52 @@ class RuntimeService:
                 if title:
                     titles.add(title)
         return sorted(titles, key=str.casefold)
+
+    @staticmethod
+    def _configured_resource_tags(data: dict[str, Any]) -> list[str]:
+        return sorted({
+            str(rule.get("tag_id") or "")
+            for rule in (data.get("producer", {}).get("media_tag_rules") or [])
+            if rule.get("tag_id")
+        })
+
+    @staticmethod
+    def _configured_stream_sources(data: dict[str, Any]) -> list[dict[str, Any]]:
+        sources: dict[str, dict[str, Any]] = {}
+        for dashboard in data.get("dashboards", []):
+            for widget in dashboard.get("widgets", []):
+                if widget.get("type") != "livestreams":
+                    continue
+                for source in (widget.get("settings") or {}).get("sources") or []:
+                    if not source.get("enabled", True):
+                        continue
+                    key = str(source.get("id") or source.get("provider") or source.get("label") or "").strip()
+                    if key:
+                        sources[key] = {**source, "id": key}
+        return list(sources.values())
+
+    @staticmethod
+    async def _livestream_statuses(sources: list[dict[str, Any]], restream: dict[str, Any]) -> list[dict[str, Any]]:
+        destinations = restream.get("destinations") or []
+        async with httpx.AsyncClient(timeout=4, follow_redirects=True, headers={"User-Agent": "ChurchBoard livestream monitor"}) as client:
+            async def check(source: dict[str, Any]) -> dict[str, Any]:
+                provider = str(source.get("provider") or "custom").casefold()
+                label = str(source.get("label") or provider.title())
+                destination = next((row for row in destinations if provider in str(row.get("name") or "").casefold()), None)
+                if destination:
+                    status = str(destination.get("status") or "offline").casefold()
+                    return {**source, "label": label, "live": status in {"live", "online", "healthy", "streaming"}, "status": status, "checked": True}
+                url = str(source.get("status_url") or "").strip()
+                if not url:
+                    return {**source, "label": label, "live": False, "status": "not configured", "checked": False}
+                try:
+                    response = await client.get(url)
+                    keyword = str(source.get("live_keyword") or "").strip().casefold()
+                    live = response.is_success and (not keyword or keyword in response.text.casefold())
+                    return {**source, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                except Exception as exc:
+                    return {**source, "label": label, "live": False, "status": "unreachable", "checked": True, "error": str(exc)}
+            return list(await asyncio.gather(*(check(source) for source in sources)))
 
     @staticmethod
     def demo_state(now: datetime | None = None) -> dict[str, Any]:

@@ -71,6 +71,10 @@ class ProPresenterNavigationRequest(BaseModel):
     widget_id: str | None = None
 
 
+class MediaTagRulesRequest(BaseModel):
+    items: list[dict] = Field(default_factory=list)
+
+
 class CredentialsRequest(BaseModel):
     name: str = ""
     email: str
@@ -253,6 +257,20 @@ async def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     store = store_from(request)
     data = store.load()
     settings = payload.model_dump()
+    server = settings.get("server") or {}
+    try:
+        port = int(server.get("port") or 8040)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Web server port must be a number")
+    if not 1 <= port <= 65535:
+        raise HTTPException(400, "Web server port must be between 1 and 65535")
+    server["port"] = port
+    if server.get("https_enabled") and not (str(server.get("ssl_certfile") or "").strip() and str(server.get("ssl_keyfile") or "").strip()):
+        raise HTTPException(400, "Choose both a TLS certificate and private key to enable HTTPS")
+    if server.get("https_enabled"):
+        missing = [label for label, value in (("certificate", server.get("ssl_certfile")), ("private key", server.get("ssl_keyfile"))) if not Path(str(value)).expanduser().is_file()]
+        if missing:
+            raise HTTPException(400, f"The TLS {' and '.join(missing)} file could not be found")
     existing_secret = data["settings"].get("planning_center", {}).get("secret", "")
     if not settings.get("planning_center", {}).get("secret"):
         settings.setdefault("planning_center", {})["secret"] = existing_secret
@@ -477,6 +495,35 @@ async def get_producer_plans(request: Request) -> dict:
     }
 
 
+@app.get("/api/integrations/planning-center/media-tags")
+async def planning_center_media_tags(request: Request) -> dict:
+    require_role(request, "admin", "editor")
+    client = PlanningCenterClient(store_from(request).load()["settings"].get("planning_center", {}))
+    if not client.configured:
+        raise HTTPException(400, "Connect Planning Center first")
+    try:
+        items = await client.media_tag_catalog()
+    except Exception as exc:
+        raise HTTPException(502, f"Could not load Planning Center Media tags: {exc}") from exc
+    return {"items": items}
+
+
+@app.put("/api/producer/media-tag-rules")
+async def update_media_tag_rules(payload: MediaTagRulesRequest, request: Request) -> dict:
+    actor = require_role(request, "admin", "editor")
+    data = store_from(request).load()
+    items = []
+    for raw in payload.items[:200]:
+        position_key, tag_id = str(raw.get("position_key") or "").strip(), str(raw.get("tag_id") or "").strip()
+        if position_key and tag_id:
+            items.append({"position_key": position_key[:200], "tag_id": tag_id[:80], "tag_label": str(raw.get("tag_label") or "")[:160]})
+    data.setdefault("producer", {})["media_tag_rules"] = items
+    add_activity(data, actor, "updated Planning Center resource tags", f"{len(items)} position mappings")
+    store_from(request).save(data)
+    await request.app.state.runtime.refresh(force=True)
+    return {"items": items}
+
+
 @app.post("/api/producer/templates", status_code=201)
 async def create_checklist(payload: ProducerPayload, request: Request) -> dict:
     return save_template(store_from(request), payload.data, require_role(request, "admin", "editor"))
@@ -606,6 +653,7 @@ async def get_runtime(request: Request, compact: bool = False) -> dict:
             "service_control",
             "osm",
             "restream",
+            "livestreams",
             "obs",
         )
     }
@@ -873,7 +921,7 @@ async def propresenter_thumbnail(presentation_uuid: str, index: int, request: Re
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(502, f"Could not load the ProPresenter slide image: {exc}") from exc
-    return Response(content=content, media_type=media_type, headers={"Cache-Control": "private, max-age=2"})
+    return Response(content=content, media_type=media_type, headers={"Cache-Control": "private, max-age=15, stale-while-revalidate=30"})
 
 
 def require_propresenter_widget_control(request: Request, dashboard_slug: str | None, widget_id: str | None) -> dict:
@@ -886,8 +934,8 @@ def require_propresenter_widget_control(request: Request, dashboard_slug: str | 
         (item for item in (dashboard or {}).get("widgets", []) if str(item.get("id") or "") == str(widget_id or "")),
         None,
     )
-    if not widget or widget.get("type") != "playlist" or widget.get("settings", {}).get("allow_remote_trigger") is False:
-        raise HTTPException(403, "Enable ProPresenter triggering in this Playlist widget's settings")
+    if not widget or widget.get("type") not in {"playlist", "pp_controls"} or widget.get("settings", {}).get("allow_remote_trigger") is False:
+        raise HTTPException(403, "Enable ProPresenter control in this widget's settings")
     return data["settings"].get("propresenter", {})
 
 
@@ -928,6 +976,40 @@ async def propresenter_navigate(direction: str, request: Request, payload: ProPr
     finally:
         await client.close()
     return {"ok": True, "direction": direction}
+
+
+@app.post("/api/integrations/propresenter/navigate-item/{direction}")
+async def propresenter_navigate_item(direction: str, request: Request, payload: ProPresenterNavigationRequest | None = None) -> dict:
+    settings = require_propresenter_widget_control(request, payload.dashboard_slug if payload else None, payload.widget_id if payload else None)
+    if direction not in {"next", "previous"}:
+        raise HTTPException(400, "Invalid ProPresenter item direction")
+    presentation = request.app.state.runtime.state.get("propresenter") or {}
+    rows = presentation.get("playlist_presentations") or []
+    active_uuid = str(presentation.get("presentation_uuid") or "")
+    active = next((row for row in rows if active_uuid and str(row.get("presentation_uuid") or "") == active_uuid), None)
+    if not active:
+        try:
+            current_index = int(presentation.get("service_item_index"))
+        except (TypeError, ValueError):
+            raise HTTPException(409, "ProPresenter did not report the current playlist item")
+    else:
+        current_index = int(active.get("index") or 0)
+    triggerable = [row for row in rows if row.get("triggerable") is not False]
+    if direction == "next":
+        target = next((row for row in triggerable if int(row.get("index", -1)) > current_index), None)
+    else:
+        target = next((row for row in reversed(triggerable) if int(row.get("index", -1)) < current_index), None)
+    if not target:
+        raise HTTPException(409, f"There is no {direction} triggerable ProPresenter item")
+    target_index = int(target.get("index") or 0)
+    client = ProPresenterClient(settings)
+    try:
+        await client.trigger_playlist_presentation(target_index, None if target.get("is_pco") else target.get("presentation_uuid"))
+    except Exception as exc:
+        raise HTTPException(502, f"Could not move to the {direction} ProPresenter item: {exc}") from exc
+    finally:
+        await client.close()
+    return {"ok": True, "direction": direction, "index": target_index}
 
 
 @app.get("/api/integrations/propresenter/playlist-diagnostics")
