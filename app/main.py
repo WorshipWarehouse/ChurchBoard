@@ -158,6 +158,35 @@ def dashboard_or_404(store: ConfigStore, identifier: str) -> dict:
     return dashboard
 
 
+def persist_livestream_secrets(data: dict, dashboard: dict, previous_id: str | None = None) -> dict:
+    """Move per-widget stream credentials out of the public dashboard document."""
+    vault = data.setdefault("secrets", {}).setdefault("livestream", {})
+    dashboard_id = str(dashboard.get("id") or "")
+    valid_keys: set[str] = set()
+    for widget in dashboard.get("widgets") or []:
+        if widget.get("type") != "livestreams":
+            continue
+        for source in (widget.get("settings") or {}).get("sources") or []:
+            provider = str(source.get("id") or source.get("provider") or "").strip().casefold()
+            if not provider:
+                continue
+            key = f"{dashboard_id}:{widget.get('id')}:{provider}"
+            valid_keys.add(key)
+            token = str(source.pop("api_token", "") or "").strip()
+            clear = bool(source.pop("clear_api_token", False))
+            if token:
+                vault[key] = token
+            elif clear:
+                vault.pop(key, None)
+            source["api_token_configured"] = bool(vault.get(key))
+    for key in list(vault):
+        if key.startswith(f"{dashboard_id}:") and key not in valid_keys:
+            vault.pop(key, None)
+        if previous_id and previous_id != dashboard_id and key.startswith(f"{previous_id}:"):
+            vault.pop(key, None)
+    return dashboard
+
+
 @app.get("/")
 async def root() -> RedirectResponse:
     return RedirectResponse("/desktop")
@@ -210,7 +239,7 @@ async def create_dashboard(payload: Dashboard, request: Request) -> dict:
     data = store.load()
     if any(item["id"] == payload.id or item["slug"] == payload.slug for item in data["dashboards"]):
         raise HTTPException(409, "Dashboard ID and URL must be unique")
-    dashboard = payload.model_dump()
+    dashboard = persist_livestream_secrets(data, payload.model_dump())
     data["dashboards"].append(dashboard)
     store.save(data)
     return dashboard
@@ -226,7 +255,8 @@ async def update_dashboard(identifier: str, payload: Dashboard, request: Request
         raise HTTPException(404, "Dashboard not found")
     if any(i != index and (item["id"] == payload.id or item["slug"] == payload.slug) for i, item in enumerate(data["dashboards"])):
         raise HTTPException(409, "Dashboard ID and URL must be unique")
-    data["dashboards"][index] = payload.model_dump()
+    previous_id = str(data["dashboards"][index].get("id") or "")
+    data["dashboards"][index] = persist_livestream_secrets(data, payload.model_dump(), previous_id)
     store.save(data)
     return data["dashboards"][index]
 
@@ -237,11 +267,16 @@ async def delete_dashboard(identifier: str, request: Request) -> None:
     store = store_from(request)
     data = store.load()
     original = len(data["dashboards"])
+    removed_ids = {str(item.get("id") or "") for item in data["dashboards"] if item.get("id") == identifier or item.get("slug") == identifier}
     data["dashboards"] = [item for item in data["dashboards"] if item["id"] != identifier and item["slug"] != identifier]
     if len(data["dashboards"]) == original:
         raise HTTPException(404, "Dashboard not found")
     if not data["dashboards"]:
         raise HTTPException(400, "ChurchBoard must have at least one dashboard")
+    vault = data.setdefault("secrets", {}).setdefault("livestream", {})
+    for key in list(vault):
+        if any(key.startswith(f"{dashboard_id}:") for dashboard_id in removed_ids):
+            vault.pop(key, None)
     store.save(data)
 
 

@@ -599,11 +599,18 @@ class RuntimeAssignmentTests(unittest.TestCase):
         self.assertEqual(RuntimeService._configured_media_titles(data), ["Alternate Logo", "Icon"])
 
     def test_livestream_sources_are_collected_from_enabled_widgets(self):
-        data = {"dashboards": [{"widgets": [{"type": "livestreams", "settings": {"sources": [
+        data = {"secrets": {"livestream": {"main:streams:youtube": "secret"}}, "dashboards": [{"id": "main", "widgets": [{"id": "streams", "type": "livestreams", "settings": {"sources": [
             {"id": "youtube", "provider": "youtube", "enabled": True},
             {"id": "facebook", "provider": "facebook", "enabled": False},
         ]}}]}]}
-        self.assertEqual([item["id"] for item in RuntimeService._configured_stream_sources(data)], ["youtube"])
+        sources = RuntimeService._configured_stream_sources(data)
+        self.assertEqual([item["id"] for item in sources], ["youtube"])
+        self.assertEqual(sources[0]["api_token"], "secret")
+
+    def test_livestream_status_payload_detection_is_explicit(self):
+        self.assertTrue(RuntimeService._payload_is_live({"status": "broadcasting"}))
+        self.assertTrue(RuntimeService._payload_is_live({"isLive": True}))
+        self.assertFalse(RuntimeService._payload_is_live({"status": "scheduled", "page": "live events"}))
 
     def test_propresenter_title_matching_prefers_song_and_forward_duplicate(self):
         items = [

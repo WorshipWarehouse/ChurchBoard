@@ -35,7 +35,7 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 - Planning Center Services LIVE control buttons
 - A WYSIWYG dashboard editor with independent layouts and color-matched liquid-glass widgets for each destination
 - Exportable/importable dashboard layout files and a categorized widget palette with gear/right-click modal settings and direct edge/corner resizing
-- A multi-provider livestream status widget for Facebook, YouTube, BoxCast, Resi, and Restream
+- A multi-provider livestream status widget with Facebook/YouTube channel URLs and independent BoxCast, Resi, and Restream API configuration
 - A dedicated ProPresenter control pad for previous/next slide and previous/next playlist item
 - A mobile-friendly producer workspace for position checklists, files, links, team access, campuses, and an activity trail *(producer-platform beta)*
 

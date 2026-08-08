@@ -162,7 +162,15 @@ Restream monitoring shows whether a broadcast is live or upcoming, its elapsed t
 
 ChurchBoard stores the client secret and OAuth tokens only in its local settings. Encoder bitrate and health are not exposed by the Restream public API, so ChurchBoard labels those values unavailable instead of estimating them. See [Restream setup](RESTREAM.md).
 
-For a compact multi-destination view, add **Livestream status** from the Audio & streaming palette. Open its gear menu and enable Facebook, YouTube, BoxCast, Resi, or Restream. When Restream is connected, ChurchBoard matches its reported destinations automatically. Otherwise supply a provider status endpoint and, if needed, a response word that appears only while live. A normal public watch-page URL often proves only that the page is reachable and is not a dependable live/offline signal; prefer an API/status endpoint or Restream.
+For a compact multi-destination view, add **Livestream status** from the Audio & streaming palette and open its gear menu. Each provider is configured independently:
+
+- **Facebook:** enter the church Page/channel URL. A public-page check is available; an API status endpoint and token are optional for more reliable monitoring.
+- **YouTube:** enter the channel URL or handle URL. Optionally add a YouTube Data API key so ChurchBoard can use the official live-search API.
+- **BoxCast:** enter the broadcast API URL, such as `https://api.boxcast.com/broadcasts/BROADCAST_ID`. Public broadcast endpoints need no token; authenticated account endpoints can use a bearer token.
+- **Resi:** enter the API/status endpoint and bearer credential supplied for your Resi account or integration.
+- **Restream:** ChurchBoard uses its connected Restream account for the Restream indicator, or you can provide a custom Restream status endpoint.
+
+Use **Live status value** when an endpoint returns a vendor-specific word such as `broadcasting`. API credentials are protected only by the operating-system access controls on the ChurchBoard data directory, so use read-only, least-privilege keys. They are stored separately from dashboard layouts and are never sent through the public dashboard API. Public Facebook and YouTube pages can change or require sign-in; provider APIs are the preferred reliable source.
 
 ## 12. Connect OBS Studio
 

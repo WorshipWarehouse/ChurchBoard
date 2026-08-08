@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 import unittest
 
@@ -268,6 +269,32 @@ class ApiTests(unittest.TestCase):
         self.assertIn("resize-corner", script)
         self.assertIn("openWidgetSettings", script)
         self.assertIn("livestream-source-editor", editor)
+        self.assertIn("setPointerCapture", script)
+
+    def test_livestream_api_credentials_are_kept_out_of_public_dashboards(self):
+        board = self.client.get("/api/dashboards/main").json()
+        board["widgets"].append({
+            "id": "secure-streams", "type": "livestreams", "x": 0, "y": 15, "w": 5, "h": 3,
+            "title": "Streams", "settings": {"sources": [{
+                "id": "youtube", "provider": "youtube", "enabled": True,
+                "channel_url": "https://www.youtube.com/@example", "api_token": "youtube-secret",
+            }]},
+        })
+        saved = self.client.put("/api/dashboards/main", json=board)
+        self.assertEqual(saved.status_code, 200)
+        saved_board = saved.json()
+        source = saved_board["widgets"][-1]["settings"]["sources"][0]
+        self.assertNotIn("api_token", source)
+        self.assertTrue(source["api_token_configured"])
+        self.assertNotIn("youtube-secret", self.client.get("/api/dashboards/main").text)
+        with open(os.environ["CHURCHBOARD_DATA_FILE"], encoding="utf-8") as handle:
+            raw = json.load(handle)
+        self.assertEqual(raw["secrets"]["livestream"]["main:secure-streams:youtube"], "youtube-secret")
+        source["clear_api_token"] = True
+        cleared = self.client.put("/api/dashboards/main", json=saved_board)
+        self.assertFalse(cleared.json()["widgets"][-1]["settings"]["sources"][0]["api_token_configured"])
+        with open(os.environ["CHURCHBOARD_DATA_FILE"], encoding="utf-8") as handle:
+            self.assertNotIn("main:secure-streams:youtube", json.load(handle)["secrets"]["livestream"])
 
     def test_server_settings_validate_port_and_https_files(self):
         settings = self.client.get("/api/settings").json()
