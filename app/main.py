@@ -138,7 +138,7 @@ async def prevent_stale_dashboard_assets(request: Request, call_next):
     response.headers["Referrer-Policy"] = "same-origin"
     if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000"
-    if request.url.path.startswith("/static/") or request.url.path in {"/admin", "/desktop"} or request.url.path.startswith(("/display/", "/editor/")):
+    if request.url.path.startswith(("/static/", "/api/producer/", "/api/users", "/api/campuses")) or request.url.path in {"/admin", "/desktop", "/producer"} or request.url.path.startswith(("/display/", "/editor/")):
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -463,6 +463,18 @@ async def delete_campus(campus_id: str, request: Request) -> None:
 @app.get("/api/producer/context")
 async def get_producer_context(request: Request) -> dict:
     return producer_context(store_from(request), request.app.state.runtime.state, require_user(request))
+
+
+@app.get("/api/producer/plans")
+async def get_producer_plans(request: Request) -> dict:
+    require_user(request)
+    state = request.app.state.runtime.state
+    return {
+        "items": state.get("plans") or [],
+        "service": state.get("service") or {},
+        "manual_plan": store_from(request).load().get("settings", {}).get("manual_plan"),
+        "planning_center": state.get("planning_center") or {},
+    }
 
 
 @app.post("/api/producer/templates", status_code=201)

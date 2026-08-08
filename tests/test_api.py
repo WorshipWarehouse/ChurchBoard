@@ -97,7 +97,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(owner.status_code, 200)
         self.assertEqual(owner.json()["role"], "admin")
         self.assertNotIn("password_hash", owner.json())
-        self.assertEqual(self.client.get("/producer").status_code, 200)
+        producer_page = self.client.get("/producer")
+        self.assertEqual(producer_page.status_code, 200)
+        self.assertEqual(producer_page.headers["cache-control"], "no-store")
         created = self.client.post("/api/producer/templates", json={"data": {
             "title": "Audio pre-service", "position_keys": ["production::audio"],
             "tasks": [{"title": "Turn on console", "required": True}, {"title": "Save backup", "required": False}],
@@ -106,6 +108,13 @@ class ApiTests(unittest.TestCase):
         template = created.json()
         context = self.client.get("/api/producer/context").json()
         self.assertEqual(context["templates"][0]["title"], "Audio pre-service")
+        plans_response = self.client.get("/api/producer/plans")
+        self.assertEqual(plans_response.status_code, 200)
+        self.assertEqual(plans_response.headers["cache-control"], "no-store")
+        self.assertEqual(plans_response.json()["items"], context["plans"])
+        producer_script = self.client.get("/static/producer.js").text
+        self.assertIn('producerApi("/api/producer/plans")', producer_script)
+        self.assertIn("setInterval(refreshPlanChoices,5000)", producer_script)
         completion = self.client.put("/api/producer/completions", json={"data": {
             "service_id": "demo", "template_id": template["id"], "task_id": template["tasks"][0]["id"],
             "person_id": "person-1", "position_key": "production::audio", "completed": True,
