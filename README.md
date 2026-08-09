@@ -2,7 +2,7 @@
   <img src="app/static/churchboard-logo.png" alt="ChurchBoard wooden church announcement board logo" width="190">
 </p>
 
-![Complete ChurchBoard main dashboard with color-matched glass widgets](docs/screenshots/main-dashboard-complete.jpg)
+![Complete ChurchBoard main dashboard with color-matched glass widgets](docs/screenshots/main-dashboard.jpg)
 
 <h1 align="center">ChurchBoard</h1>
 
