@@ -29,14 +29,30 @@ The service-type name and ID are saved together. If Planning Center temporarily 
 ## 2. Choose positions for a widget
 
 1. From Setup, choose **Edit** for a dashboard.
-2. Select a **Scheduled Positions & Mics** widget.
-3. In the inspector, check the teams/categories to include, such as Band or Production.
+2. Click **Edit** in the upper-right corner of a **Scheduled Positions & Mics** widget (or right-click it).
+3. In the settings dialog, check the teams/categories to include, such as Band or Production.
 4. Check the individual Planning Center positions to display.
 5. Under **Cards represent**, choose **One card per person** or **One card per position**.
 6. Drag positions into the desired display order.
 7. Save the dashboard.
 
 Every selected position appears even when no person or microphone is assigned. **One card per person** consolidates a person who holds several selected roles—such as vocals and guitar—into one card and lists all of that person's mapped microphone/equipment channels. **One card per position** keeps every selected role in its own card, so the same person can appear more than once. This choice is saved independently for each dashboard widget, allowing the green room and audio booth to use different views. An open Planning Center position displays **Unassigned**.
+
+### Planning Center tagged documentation
+
+Producer resources can come directly from Planning Center Services Media:
+
+1. In Planning Center Services, create a Media tag group such as **Documentation**.
+2. Add tags for roles or departments, such as **Audio**, **Lights**, and **Producer**.
+3. Add or upload the desired media and apply the appropriate tags.
+4. In ChurchBoard, open **Producer → Checklists & resources**.
+5. Under **Planning Center tagged media**, choose a scheduled position and its corresponding media tag, then save.
+
+ChurchBoard shows all media carrying that tag to the person scheduled in the mapped position. Files open in an authenticated viewer inside ChurchBoard rather than redirecting the user to Planning Center. The Planning Center PAT account must have access to those Services Media items.
+
+### Planning Center sermon notes
+
+Add **Sermon notes** from the Planning Center widget group. In its settings, choose the plan item (for example, **Message**), the named Planning Center note field (for example, **Vocals**), and a starting text size. The notes are scrollable by touch, mouse, keyboard, or the large up/down buttons and remain readable as the widget is resized.
 
 ## 3. Add Shure microphones
 
@@ -81,7 +97,7 @@ In a ProPresenter widget, choose:
 - whether to show `Slide x of y`;
 - item/playlist title and current/next part labels.
 
-Part labels use their ProPresenter colors. Slide notes appear when enabled, and widget typography scales to keep long content visible.
+Part labels use their ProPresenter colors. Slide notes and countdown timers scale with the widget to keep content visible, including short widgets. The Playlist widget also lets each board define whether slide controls and arrow-key/spacebar control start enabled; an operator can still change those switches on the live board.
 
 ## 6. Let ProPresenter drive Services LIVE
 
@@ -94,6 +110,8 @@ When ProPresenter is synced from a Planning Center plan, ChurchBoard can use the
 5. Set how long a presentation must remain active before ChurchBoard advances LIVE.
 
 ChurchBoard first uses ProPresenter's Planning Center playlist/item ordering when available. It then uses normalized title matching, including non-song items such as `Message`, even when the presentation itself has a title like a Scripture reference.
+
+The **ProPresenter playlist** widget can display either ProPresenter's rendered preview images or the text returned for every cue. Open that widget's settings and choose **Slide content**. Repeated chorus, bridge, tag, and other arrangement groups keep their expanded playlist position while ChurchBoard reuses the correct original ProPresenter thumbnail.
 
 ## 7. Configure order of service
 
@@ -142,13 +160,25 @@ ChurchBoard displays Open Sound Meter's selected level after applying the same S
 Restream monitoring shows whether a broadcast is live or upcoming, its elapsed time and available viewer count, and the state of each configured destination.
 
 1. Create a Restream API application and copy its **Client ID** and **Client Secret**.
-2. Add `http://127.0.0.1:8040/api/integrations/restream/callback` as the application's Redirect URI.
+2. Add the Redirect URI displayed in ChurchBoard Setup. It follows the current HTTP/HTTPS origin and configured port.
 3. Grant only the read scopes needed for channels, streams/events, and viewer analytics.
 4. In ChurchBoard Setup, enable **Restream monitoring** and enter both credentials.
 5. Choose **Save & connect Restream**, authorize the account, and then test the connection.
 6. Add a **Restream livestream** widget to any dashboard that needs broadcast visibility.
 
+For the multi-provider **Livestream status** widget, configure each provider in that widget's settings. YouTube accepts a channel or current watch URL and can use a YouTube Data API key for reliable channel discovery and viewer counts. Facebook requires a Page access token for reliable Page live/offline state because anonymous Facebook Page HTML does not consistently expose the active broadcast. BoxCast, Resi, and Restream accept their corresponding status API endpoints and bearer credentials. Saved credentials remain server-side and are not returned with public dashboard configuration.
+
 ChurchBoard stores the client secret and OAuth tokens only in its local settings. Encoder bitrate and health are not exposed by the Restream public API, so ChurchBoard labels those values unavailable instead of estimating them. See [Restream setup](RESTREAM.md).
+
+For a compact multi-destination view, add **Livestream status** from the Audio & streaming palette and choose **Edit**. Every provider uses a green light while live/streaming and a gray light otherwise. A running elapsed timer is shown for each live source, along with its current viewer count when the provider API exposes one. Each provider is configured independently:
+
+- **Facebook:** enter the church Page/channel URL. A public-page check is available; an API status endpoint and token are optional for more reliable monitoring.
+- **YouTube:** enter the channel URL or handle URL. Optionally add a YouTube Data API key so ChurchBoard can use the official live-search API.
+- **BoxCast:** enter the broadcast API URL, such as `https://api.boxcast.com/broadcasts/BROADCAST_ID`. Public broadcast endpoints need no token; authenticated account endpoints can use a bearer token.
+- **Resi:** enter the API/status endpoint and bearer credential supplied for your Resi account or integration.
+- **Restream:** ChurchBoard uses its connected Restream account for the Restream indicator, or you can provide a custom Restream status endpoint.
+
+Use **Live status value** when an endpoint returns a vendor-specific word such as `broadcasting`. API credentials are protected only by the operating-system access controls on the ChurchBoard data directory, so use read-only, least-privilege keys. They are stored separately from dashboard layouts and are never sent through the public dashboard API. Public Facebook and YouTube pages can change or require sign-in; provider APIs are the preferred reliable source.
 
 ## 12. Connect OBS Studio
 
@@ -162,7 +192,13 @@ ChurchBoard can monitor OBS Studio through its built-in WebSocket server without
 
 The widget reports connection, streaming and recording state, elapsed time, output bitrate/statistics, dropped frames, and the configured preview. Keep OBS and ChurchBoard on the same trusted production network and do not expose the WebSocket port to the internet.
 
-## 13. Open displays
+## 13. Configure the web server
+
+Open **Setup → Web server** to change the listening port or enable direct HTTPS. Supply both the certificate and private-key paths. Restart ChurchBoard after saving. The page will then load using the configured `http://` or `https://` address; desktop and tray launch actions follow the same scheme and port.
+
+Ports range from 1–65535. Port 80 is accepted, but macOS and Linux normally restrict ports below 1024. A reverse proxy on 80/443 is preferable to running ChurchBoard with elevated privileges. Keep the service on a trusted network and never commit the TLS private key.
+
+## 14. Open displays
 
 Each dashboard has its own **Background color** picker at the top of the editor. The dashboard background, translucent liquid-glass widget surfaces, reflections, borders, and interface accents follow that color. Operational mic and SPL states remain green, yellow, or red so warnings are still immediately recognizable.
 

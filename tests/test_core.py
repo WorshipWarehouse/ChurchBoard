@@ -18,6 +18,16 @@ from app.store import ConfigStore
 
 
 class StoreTests(unittest.TestCase):
+    def test_store_migrates_producer_platform_collections(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory) / "churchboard.json")
+            data = store.load()
+            self.assertEqual(data["version"], 3)
+            self.assertFalse(data["organization"]["auth_enabled"])
+            self.assertTrue(data["organization"]["passwords_required"])
+            self.assertEqual(data["organization"]["campuses"][0]["id"], "main")
+            self.assertEqual(data["producer"]["checklist_templates"], [])
+
     def test_new_store_contains_destination_dashboards(self):
         with tempfile.TemporaryDirectory() as directory:
             store = ConfigStore(Path(directory) / "state.json")
@@ -227,6 +237,29 @@ class PlanningCenterTests(unittest.TestCase):
 
 
 class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
+    async def test_media_tag_catalog_and_tagged_resources(self):
+        client = PlanningCenterClient({"enabled": True, "application_id": "id", "secret": "secret"})
+
+        async def fake_get_all(path, params=None):
+            if path == "/tag_groups":
+                return {"data": [{"id": "group-1", "attributes": {"name": "Documentation", "tags_for": "media"}}]}
+            if path == "/tag_groups/group-1/tags":
+                return {"data": [{"id": "tag-audio", "attributes": {"name": "Audio"}}]}
+            self.assertEqual(path, "/media")
+            self.assertEqual(params["where[media_tag_ids][]"], "tag-audio")
+            return {
+                "data": [{"id": "media-1", "attributes": {"title": "Audio Instructions", "image_url": "https://example.test/cover.png"}, "relationships": {"attachments": {"data": [{"type": "Attachment", "id": "file-1"}]}}}],
+                "included": [{"type": "Attachment", "id": "file-1", "attributes": {"url": "https://example.test/audio.pdf", "filetype": "pdf", "display_name": "Audio.pdf"}}],
+            }
+
+        client._get_all = fake_get_all
+        groups = await client.media_tag_catalog()
+        self.assertEqual(groups[0]["tags"][0]["name"], "Audio")
+        resources = await client.media_for_tag("tag-audio")
+        self.assertEqual(resources[0]["url"], "https://example.test/audio.pdf")
+        self.assertEqual(resources[0]["source"], "Planning Center")
+        self.assertEqual(resources[0]["inline_url"], "/api/producer/planning-center-media/media-1/content")
+        self.assertEqual(resources[0]["filename"], "Audio.pdf")
     async def test_catalog_groups_positions_by_team(self):
         client = PlanningCenterClient({"enabled": True, "application_id": "id", "secret": "secret", "service_type_ids": ["st-1"]})
 
@@ -272,7 +305,7 @@ class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
                     "attributes": {"title": "Song One", "item_type": "song", "length": 240, "sequence": 1},
                     "relationships": {
                         "item_assignments": {"data": [{"type": "ItemAssignment", "id": "assignment-1"}]},
-                        "item_notes": {"data": []},
+                        "item_notes": {"data": [{"type": "ItemNote", "id": "note-1"}]},
                         "item_times": {"data": []},
                     },
                 }],
@@ -280,7 +313,7 @@ class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
                     "type": "ItemAssignment",
                     "id": "assignment-1",
                     "relationships": {"assignable": {"data": {"type": "Person", "id": "person-1"}}},
-                }],
+                }, {"type": "ItemNote", "id": "note-1", "attributes": {"category_name": "Vocals", "content": "Testing"}}],
             }
 
         client._get = fake_get
@@ -288,6 +321,7 @@ class PlanningCenterCatalogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail["people"][0]["person_id"], "person-1")
         self.assertEqual(detail["items"][0]["leader"], "Jordan Lee")
         self.assertEqual(detail["items"][0]["leader_person_ids"], ["person-1"])
+        self.assertEqual(detail["items"][0]["note_fields"], [{"name": "Vocals", "content": "Testing"}])
 
     async def test_media_by_title_returns_the_planning_center_image(self):
         client = PlanningCenterClient({"enabled": True, "application_id": "id", "secret": "secret"})
@@ -566,6 +600,72 @@ class RuntimeAssignmentTests(unittest.TestCase):
             {"type": "assignments", "settings": {"use_planning_center_icon": False, "unassigned_media_title": "Disabled Logo"}},
         ]}]}
         self.assertEqual(RuntimeService._configured_media_titles(data), ["Alternate Logo", "Icon"])
+
+    def test_livestream_sources_are_collected_from_enabled_widgets(self):
+        data = {"secrets": {"livestream": {"main:streams:youtube": "secret"}}, "dashboards": [{"id": "main", "widgets": [{"id": "streams", "type": "livestreams", "settings": {"sources": [
+            {"id": "youtube", "provider": "youtube", "enabled": True},
+            {"id": "facebook", "provider": "facebook", "enabled": False},
+        ]}}]}]}
+        sources = RuntimeService._configured_stream_sources(data)
+        self.assertEqual([item["id"] for item in sources], ["youtube"])
+        self.assertEqual(sources[0]["api_token"], "secret")
+
+    def test_livestream_status_payload_detection_is_explicit(self):
+        self.assertTrue(RuntimeService._payload_is_live({"status": "broadcasting"}))
+        self.assertTrue(RuntimeService._payload_is_live({"status": "LIVE_NOW"}))
+        self.assertTrue(RuntimeService._payload_is_live({"isLive": True}))
+        self.assertFalse(RuntimeService._payload_is_live({"status": "scheduled", "page": "live events"}))
+
+    def test_livestream_metrics_keep_start_time_and_current_viewers(self):
+        result = RuntimeService._stream_result(
+            {"id": "youtube", "live": True, "status": "live"},
+            {"liveStreamingDetails": {"actualStartTime": "2026-08-08T12:00:00Z", "concurrentViewers": "143"}},
+        )
+        self.assertEqual(result["started_at"], "2026-08-08T12:00:00Z")
+        self.assertEqual(result["viewers"], 143)
+        self.assertGreater(result["duration_seconds"], 0)
+
+    def test_facebook_livestream_metrics_support_graph_api_fields(self):
+        result = RuntimeService._stream_result(
+            {"id": "facebook", "live": True, "status": "live"},
+            {"data": [{"status": "LIVE", "creation_time": "2026-08-08T12:00:00Z", "live_views": "87"}]},
+        )
+        self.assertEqual(result["started_at"], "2026-08-08T12:00:00Z")
+        self.assertEqual(result["viewers"], 87)
+
+    def test_facebook_page_token_uses_official_live_video_status(self):
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"data": [{"status": "LIVE", "creation_time": "2026-08-08T12:00:00Z", "live_views": 41}]}
+
+        class Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def get(self, url, **kwargs):
+                self.url = url
+                self.params = kwargs.get("params") or {}
+                return Response()
+
+        fake = Client()
+        with patch("app.services.runtime.httpx.AsyncClient", return_value=fake):
+            statuses = asyncio.run(RuntimeService._livestream_statuses([{
+                "id": "facebook",
+                "provider": "facebook",
+                "label": "Facebook",
+                "channel_url": "https://www.facebook.com/yourchurch",
+                "api_token": "page-token",
+            }], {}, []))
+        self.assertEqual(fake.url, "https://graph.facebook.com/yourchurch/live_videos")
+        self.assertEqual(fake.params["broadcast_status"], "LIVE")
+        self.assertTrue(statuses[0]["live"])
+        self.assertEqual(statuses[0]["viewers"], 41)
 
     def test_propresenter_title_matching_prefers_song_and_forward_duplicate(self):
         items = [
@@ -1017,13 +1117,14 @@ class ProPresenterTests(unittest.TestCase):
                 {"uuid": "verse", "name": "Verse 2", "slides": [{"text": "Verse first"}, {"text": "Verse last"}]},
                 {"uuid": "bridge", "name": "Bridge", "slides": [{"text": "Bridge line"}]},
             ],
-            "arrangements": [{"id": {"uuid": "arrangement", "index": 0}, "groups": ["verse", "chorus", "bridge"], "total_cues": 4}],
+            "arrangements": [{"id": {"uuid": "arrangement", "index": 0}, "groups": ["verse", "chorus", "bridge", "chorus"], "total_cues": 5}],
         }
         entries = ProPresenterClient._presentation_cue_entries(presentation)
-        self.assertEqual([entry["part"] for entry in entries], ["Verse 2", "Verse 2", "Chorus 1", "Bridge"])
+        self.assertEqual([entry["part"] for entry in entries], ["Verse 2", "Verse 2", "Chorus 1", "Bridge", "Chorus 1"])
+        self.assertEqual([entry["_thumbnail_index"] for entry in entries], [2, 3, 1, 4, 1])
         current, next_position = ProPresenterClient._cue_positions(entries, {"text": "Verse last"}, {"text": "Chorus line"}, 1)
         self.assertEqual((current, next_position), (1, 2))
-        self.assertEqual(ProPresenterClient._cue_total({"presentation_index": {"total_cues": 4}}, len(entries)), 4)
+        self.assertEqual(ProPresenterClient._cue_total({"presentation_index": {"total_cues": 5}}, len(entries)), 5)
 
     def test_nested_live_presentation_index_is_read(self):
         payload = {"presentation_index": {"index": 4, "presentation_id": {"uuid": "ABC-123"}}}
