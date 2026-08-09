@@ -612,6 +612,7 @@ class RuntimeAssignmentTests(unittest.TestCase):
 
     def test_livestream_status_payload_detection_is_explicit(self):
         self.assertTrue(RuntimeService._payload_is_live({"status": "broadcasting"}))
+        self.assertTrue(RuntimeService._payload_is_live({"status": "LIVE_NOW"}))
         self.assertTrue(RuntimeService._payload_is_live({"isLive": True}))
         self.assertFalse(RuntimeService._payload_is_live({"status": "scheduled", "page": "live events"}))
 
@@ -623,6 +624,48 @@ class RuntimeAssignmentTests(unittest.TestCase):
         self.assertEqual(result["started_at"], "2026-08-08T12:00:00Z")
         self.assertEqual(result["viewers"], 143)
         self.assertGreater(result["duration_seconds"], 0)
+
+    def test_facebook_livestream_metrics_support_graph_api_fields(self):
+        result = RuntimeService._stream_result(
+            {"id": "facebook", "live": True, "status": "live"},
+            {"data": [{"status": "LIVE", "creation_time": "2026-08-08T12:00:00Z", "live_views": "87"}]},
+        )
+        self.assertEqual(result["started_at"], "2026-08-08T12:00:00Z")
+        self.assertEqual(result["viewers"], 87)
+
+    def test_facebook_page_token_uses_official_live_video_status(self):
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"data": [{"status": "LIVE", "creation_time": "2026-08-08T12:00:00Z", "live_views": 41}]}
+
+        class Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def get(self, url, **kwargs):
+                self.url = url
+                self.params = kwargs.get("params") or {}
+                return Response()
+
+        fake = Client()
+        with patch("app.services.runtime.httpx.AsyncClient", return_value=fake):
+            statuses = asyncio.run(RuntimeService._livestream_statuses([{
+                "id": "facebook",
+                "provider": "facebook",
+                "label": "Facebook",
+                "channel_url": "https://www.facebook.com/yourchurch",
+                "api_token": "page-token",
+            }], {}, []))
+        self.assertEqual(fake.url, "https://graph.facebook.com/yourchurch/live_videos")
+        self.assertEqual(fake.params["broadcast_status"], "LIVE")
+        self.assertTrue(statuses[0]["live"])
+        self.assertEqual(statuses[0]["viewers"], 41)
 
     def test_propresenter_title_matching_prefers_song_and_forward_duplicate(self):
         items = [
@@ -1074,13 +1117,14 @@ class ProPresenterTests(unittest.TestCase):
                 {"uuid": "verse", "name": "Verse 2", "slides": [{"text": "Verse first"}, {"text": "Verse last"}]},
                 {"uuid": "bridge", "name": "Bridge", "slides": [{"text": "Bridge line"}]},
             ],
-            "arrangements": [{"id": {"uuid": "arrangement", "index": 0}, "groups": ["verse", "chorus", "bridge"], "total_cues": 4}],
+            "arrangements": [{"id": {"uuid": "arrangement", "index": 0}, "groups": ["verse", "chorus", "bridge", "chorus"], "total_cues": 5}],
         }
         entries = ProPresenterClient._presentation_cue_entries(presentation)
-        self.assertEqual([entry["part"] for entry in entries], ["Verse 2", "Verse 2", "Chorus 1", "Bridge"])
+        self.assertEqual([entry["part"] for entry in entries], ["Verse 2", "Verse 2", "Chorus 1", "Bridge", "Chorus 1"])
+        self.assertEqual([entry["_thumbnail_index"] for entry in entries], [2, 3, 1, 4, 1])
         current, next_position = ProPresenterClient._cue_positions(entries, {"text": "Verse last"}, {"text": "Chorus line"}, 1)
         self.assertEqual((current, next_position), (1, 2))
-        self.assertEqual(ProPresenterClient._cue_total({"presentation_index": {"total_cues": 4}}, len(entries)), 4)
+        self.assertEqual(ProPresenterClient._cue_total({"presentation_index": {"total_cues": 5}}, len(entries)), 5)
 
     def test_nested_live_presentation_index_is_read(self):
         payload = {"presentation_index": {"index": 4, "presentation_id": {"uuid": "ABC-123"}}}

@@ -38,11 +38,23 @@
   padding-right: 82px !important;
 }
 
+.livestream-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)) !important;
+  grid-auto-rows: minmax(0, 1fr) !important;
+  align-content: stretch !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
 .livestream-source {
-  grid-template-columns: clamp(46px, 8cqw, 66px) minmax(0, 1fr) 16px !important;
-  gap: clamp(10px, 2cqw, 18px) !important;
-  padding: clamp(12px, 2.6cqw, 22px) !important;
+  container-type: size;
+  min-height: 0 !important;
+  grid-template-columns: clamp(30px, min(14cqw, 44cqh), 66px) minmax(0, 1fr) clamp(9px, 4cqw, 16px) !important;
+  gap: clamp(6px, min(3cqw, 8cqh), 18px) !important;
+  padding: clamp(7px, min(4cqw, 8cqh), 22px) !important;
   border-width: 2px !important;
+  overflow: hidden !important;
 }
 
 .livestream-source.live {
@@ -51,28 +63,32 @@
 }
 
 .livestream-provider {
-  width: clamp(46px, 8cqw, 66px) !important;
-  height: clamp(46px, 8cqw, 66px) !important;
-  font-size: clamp(1.25rem, 4cqw, 2rem) !important;
+  width: clamp(30px, min(14cqw, 44cqh), 66px) !important;
+  height: clamp(30px, min(14cqw, 44cqh), 66px) !important;
+  font-size: clamp(.9rem, min(7cqw, 22cqh), 2rem) !important;
 }
 
 .livestream-source strong {
-  font-size: clamp(1.15rem, 4.5cqw, 2rem) !important;
+  font-size: clamp(.72rem, min(7cqw, 16cqh), 1.8rem) !important;
   line-height: 1.05 !important;
 }
 
 .livestream-source small {
-  margin-top: 3px !important;
-  font-size: clamp(.8rem, 2.8cqw, 1.15rem) !important;
+  margin-top: clamp(1px, 1cqh, 3px) !important;
+  overflow: hidden !important;
+  font-size: clamp(.55rem, min(4.5cqw, 10cqh), 1rem) !important;
+  line-height: 1.05 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .livestream-metrics {
   display: flex !important;
   flex-wrap: wrap !important;
-  gap: 6px clamp(16px, 4cqw, 30px) !important;
-  margin-top: clamp(7px, 1.5cqw, 12px) !important;
+  gap: clamp(2px, 1cqh, 6px) clamp(8px, 4cqw, 30px) !important;
+  margin-top: clamp(2px, 2cqh, 10px) !important;
   color: var(--text) !important;
-  font-size: clamp(1.2rem, 5.5cqw, 2.4rem) !important;
+  font-size: clamp(.68rem, min(6cqw, 13cqh), 2rem) !important;
   font-weight: 850 !important;
   line-height: 1.05 !important;
 }
@@ -83,6 +99,23 @@
   font-size: 1em !important;
   font-style: normal !important;
   font-weight: 850 !important;
+}
+
+.pp-list-slide > .pp-slide-fallback {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9 !important;
+  padding: clamp(5px, 2cqw, 12px) !important;
+  background-color: #080b10 !important;
+  background-image:
+    linear-gradient(45deg, #171b22 25%, transparent 25%),
+    linear-gradient(-45deg, #171b22 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #171b22 75%),
+    linear-gradient(-45deg, transparent 75%, #171b22 75%) !important;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0 !important;
+  background-size: 16px 16px !important;
+  font-size: clamp(.48rem, 2.2cqw, .82rem) !important;
+  line-height: 1.08 !important;
 }
 
 .clock-value {

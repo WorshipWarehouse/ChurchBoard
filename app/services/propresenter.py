@@ -171,6 +171,8 @@ class ProPresenterClient:
         current_position, next_position = self._cue_positions(cue_entries, current, next_slide, index)
         current_entry = cue_entries[current_position] if 0 <= current_position < len(cue_entries) else {}
         next_entry = cue_entries[next_position] if 0 <= next_position < len(cue_entries) else {}
+        current_thumbnail_position = int(current_entry.get("_thumbnail_index", current_position))
+        next_thumbnail_position = int(next_entry.get("_thumbnail_index", next_position))
         current_details = current_entry.get("cue", {})
         next_details = next_entry.get("cue", {})
         current_result = self._slide(current)
@@ -245,7 +247,7 @@ class ProPresenterClient:
             "color": current_entry.get("color", ""),
             "index": index + 1,
             "total": cue_total,
-            "image_url": self._thumbnail_url(presentation_uuid, current_position, current_result["image_uuid"])
+            "image_url": self._thumbnail_url(presentation_uuid, current_thumbnail_position, current_result["image_uuid"])
             if current_result["image_uuid"] or current_details else "",
             "timer_text": current_timer,
             "media": visible_media,
@@ -255,7 +257,7 @@ class ProPresenterClient:
             "color": next_entry.get("color", ""),
             "index": index + 2 if index + 1 < cue_total else 0,
             "total": cue_total,
-            "image_url": self._thumbnail_url(presentation_uuid, next_position, next_result["image_uuid"])
+            "image_url": self._thumbnail_url(presentation_uuid, next_thumbnail_position, next_result["image_uuid"])
             if next_result["image_uuid"] or next_details else "",
             "timer_text": self._countdown_text(next_result.get("text")),
         })
@@ -278,7 +280,11 @@ class ProPresenterClient:
                     "notes": self._notes(entry.get("cue")),
                     "part": entry.get("part", ""),
                     "color": entry.get("color", ""),
-                    "image_url": self._thumbnail_url(thumbnail_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")),
+                    "image_url": self._thumbnail_url(
+                        thumbnail_uuid,
+                        int(entry.get("_thumbnail_index", position)),
+                        self._slide(entry.get("cue")).get("image_uuid", ""),
+                    ),
                     "active": active_row and position == current_position,
                 }
                 for position, entry in enumerate(entries)
@@ -292,7 +298,7 @@ class ProPresenterClient:
             "next": next_result,
             "timers": self._transport_payload.get("timers") or [],
             "slides": [
-                {"index": position + 1, "text": self._slide(entry.get("cue")).get("text", ""), "notes": self._notes(entry.get("cue")), "part": entry.get("part", ""), "color": entry.get("color", ""), "image_url": self._thumbnail_url(presentation_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")), "active": position == current_position}
+                {"index": position + 1, "text": self._slide(entry.get("cue")).get("text", ""), "notes": self._notes(entry.get("cue")), "part": entry.get("part", ""), "color": entry.get("color", ""), "image_url": self._thumbnail_url(presentation_uuid, int(entry.get("_thumbnail_index", position)), self._slide(entry.get("cue")).get("image_uuid", "")), "active": position == current_position}
                 for position, entry in enumerate(cue_entries)
             ],
             "playlist_presentations": playlist_presentations,
@@ -647,19 +653,30 @@ class ProPresenterClient:
         if not isinstance(sequence, list) or not sequence:
             return cls._cue_entries(raw)
 
-        group_map = {identifier(group): group for group in groups if isinstance(group, dict) and identifier(group)}
+        group_entries: dict[str, list[dict[str, Any]]] = {}
+        thumbnail_offset = 0
+        for group in groups:
+            group_id = identifier(group)
+            if not isinstance(group, dict) or not group_id:
+                continue
+            source_entries = cls._cue_entries(group)
+            group_entries[group_id] = [
+                {**entry, "_thumbnail_index": thumbnail_offset + position}
+                for position, entry in enumerate(source_entries)
+            ]
+            thumbnail_offset += len(source_entries)
         sequence_ids = [identifier(value) for value in sequence]
-        sequence_ids = [value for value in sequence_ids if value in group_map]
+        sequence_ids = [value for value in sequence_ids if value in group_entries]
         if not sequence_ids:
             return cls._cue_entries(raw)
 
         entries: list[dict[str, Any]] = []
-        # ProPresenter's thumbnail and presentation-index routes address the
-        # active arrangement itself. Library groups that are not referenced by
-        # that arrangement must not be inserted ahead of it, or every thumbnail
-        # and active-cue marker after that point is shifted.
+        # ProPresenter expands repeated arrangement groups in its live cue
+        # order, but its thumbnail endpoint continues to address the original
+        # library cue. Preserve the expanded order while retaining each cue's
+        # source thumbnail index so repeated groups do not become 404s.
         for group_id in sequence_ids:
-            entries.extend(cls._cue_entries(group_map[group_id]))
+            entries.extend(dict(entry) for entry in group_entries[group_id])
         return entries
 
     @classmethod

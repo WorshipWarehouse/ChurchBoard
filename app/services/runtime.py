@@ -956,7 +956,7 @@ class RuntimeService:
         if keyword:
             return keyword.casefold() in json.dumps(payload, default=str).casefold()
         live_keys = {"live", "is_live", "islive", "is_live_now", "islivenow", "online", "streaming", "broadcasting"}
-        live_values = {"live", "online", "healthy", "streaming", "broadcasting"}
+        live_values = {"live", "live_now", "online", "healthy", "streaming", "broadcasting"}
         if isinstance(payload, dict):
             for key, value in payload.items():
                 normalized = re.sub(r"[^a-z]", "", str(key).casefold())
@@ -992,8 +992,8 @@ class RuntimeService:
     @staticmethod
     def _stream_result(result: dict[str, Any], payload: Any, previous: dict[str, Any] | None = None) -> dict[str, Any]:
         live = bool(result.get("live"))
-        started = RuntimeService._payload_value(payload, {"actualStartTime", "started_at", "start_time", "startedAt", "live_started_at"})
-        viewers = RuntimeService._payload_value(payload, {"currentViewers", "concurrentViewers", "current_viewers", "live_viewers", "viewers"})
+        started = RuntimeService._payload_value(payload, {"actualStartTime", "started_at", "start_time", "startedAt", "live_started_at", "creation_time"})
+        viewers = RuntimeService._payload_value(payload, {"currentViewers", "concurrentViewers", "current_viewers", "live_viewers", "live_views", "viewers"})
         duration = RuntimeService._payload_value(payload, {"duration_seconds", "elapsed_seconds", "live_duration"})
         if live and not started and previous and previous.get("live"):
             started = previous.get("started_at")
@@ -1048,6 +1048,29 @@ class RuntimeService:
                                     if detail_response.is_success: details = detail_response.json()
                             result = {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
                             return RuntimeService._stream_result(result, details, previous_by_id.get(str(public.get("id") or provider)))
+                    if provider == "facebook" and token and channel_url and not api_url:
+                        page_match = re.search(r"facebook\.com/(?:pages/[^/?#]+/)?([^/?#]+)", channel_url, re.I)
+                        page_reference = page_match.group(1) if page_match else ""
+                        if page_reference.casefold() in {"", "live", "videos", "watch", "plugins"}:
+                            return {**public, "label": label, "live": False, "status": "invalid Page URL", "checked": False}
+                        response = await client.get(
+                            f"https://graph.facebook.com/{page_reference}/live_videos",
+                            params={
+                                "access_token": token,
+                                "broadcast_status": "LIVE",
+                                "fields": "status,title,live_views,creation_time,permalink_url",
+                                "limit": 1,
+                            },
+                        )
+                        response.raise_for_status()
+                        payload = response.json() or {}
+                        broadcasts = payload.get("data") if isinstance(payload, dict) else []
+                        live = any(
+                            str(row.get("status") or "").casefold() in {"live", "live_now", "broadcasting"}
+                            for row in broadcasts or [] if isinstance(row, dict)
+                        )
+                        result = {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                        return RuntimeService._stream_result(result, payload, previous_by_id.get(str(public.get("id") or provider)))
                     if api_url:
                         headers = {"Authorization": f"Bearer {token}"} if token else None
                         response = await client.get(api_url, headers=headers)
@@ -1076,7 +1099,12 @@ class RuntimeService:
                             or '"is_live_streaming":true' in compact
                             or '"broadcast_status":"live"' in compact
                         )
-                        result = {**public, "label": label, "live": live, "status": "live" if live else "offline", "checked": True}
+                        # Facebook no longer includes dependable broadcast state
+                        # in an anonymous Page response. Do not turn a missing
+                        # marker into a false "offline" result; a Page access
+                        # token enables the official live_videos check above.
+                        status = "live" if live else ("Page access token required" if provider == "facebook" else "offline")
+                        result = {**public, "label": label, "live": live, "status": status, "checked": live or provider != "facebook"}
                         return RuntimeService._stream_result(result, response.text, previous_by_id.get(str(public.get("id") or provider)))
                     return {**public, "label": label, "live": False, "status": "not configured", "checked": False}
                 except Exception as exc:

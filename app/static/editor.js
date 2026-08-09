@@ -8,7 +8,7 @@ document.querySelector(".palette .hint").textContent="Drag widgets on the canvas
 let dashboard,selected=null,dirty=false,catalogTeams=[],catalogError="",runtimeState={};
 const newId=type=>`${type}-${Date.now().toString(36)}`;
 const streamProviders=[
-  {id:"facebook",label:"Facebook",channelLabel:"Facebook Page or channel URL",channelPlaceholder:"https://www.facebook.com/yourchurch",credential:"Optional API token",help:"ChurchBoard can check the public Page/channel URL directly. For the most reliable result, add a vendor API endpoint and token."},
+  {id:"facebook",label:"Facebook",channelLabel:"Facebook Page URL",channelPlaceholder:"https://www.facebook.com/yourchurch",credential:"Facebook Page access token",help:"Add a Page access token so ChurchBoard can use Facebook's official live_videos status. Facebook's anonymous Page HTML no longer reliably identifies a live broadcast."},
   {id:"youtube",label:"YouTube",channelLabel:"YouTube channel URL",channelPlaceholder:"https://www.youtube.com/@yourchurch",credential:"Optional YouTube Data API key",help:"Channel URLs, handles, and /channel/ URLs are supported. An API key uses YouTube's official live-search API."},
   {id:"boxcast",label:"BoxCast",apiPlaceholder:"https://api.boxcast.com/broadcasts/BROADCAST_ID",credential:"Optional BoxCast bearer token",help:"Use a BoxCast broadcast API URL. Public broadcast endpoints work without a token; account API endpoints can use a bearer token."},
   {id:"resi",label:"Resi",apiPlaceholder:"https://your-resi-status-endpoint",credential:"Resi API bearer token",help:"Enter the status endpoint and credential supplied for your Resi account or integration."},

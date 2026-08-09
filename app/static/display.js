@@ -127,7 +127,7 @@ function updatePlaylistLiveState(root=document){const pp=lastState.propresenter|
 function fitOrderService(root=document){
   root.querySelectorAll(".order-list").forEach(list=>{
     if(list.classList.contains("full-service-order-list"))return;
-    if(list.classList.contains("full-service-order-fit-list")||list.classList.contains("current-service-order-list")){let low=.1,high=1,best=.1;for(let pass=0;pass<8;pass++){const scale=(low+high)/2;list.style.setProperty("--order-fit-scale",scale);if(list.scrollHeight<=list.clientHeight+1){best=scale;low=scale}else high=scale}list.style.setProperty("--order-fit-scale",best);return}
+    if(list.classList.contains("full-service-order-fit-list")||list.classList.contains("current-service-order-list")){let low=.1,high=2.5,best=.1;for(let pass=0;pass<9;pass++){const scale=(low+high)/2;list.style.setProperty("--order-fit-scale",scale);if(list.scrollHeight<=list.clientHeight+1&&list.scrollWidth<=list.clientWidth+1){best=scale;low=scale}else high=scale}list.style.setProperty("--order-fit-scale",best);return}
     const rows=[...list.querySelectorAll("li")];if(!rows.length)return;
     rows.forEach(row=>row.classList.remove("order-hidden"));
     const foundActive=rows.findIndex(row=>row.classList.contains("active")),activeIndex=foundActive>=0?foundActive:0,heights=rows.map(row=>Math.ceil(row.getBoundingClientRect().height)),available=Math.max(0,list.clientHeight-2),priority=[];
