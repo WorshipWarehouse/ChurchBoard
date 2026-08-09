@@ -68,8 +68,20 @@ const assignmentEntries = (settings,state) => {
 };
 const filteredPeople = (settings,state) => {
   const people=state.people||[],selectedKeys=[...new Set(settings.position_keys||[])],teamIds=new Set((settings.team_ids||[]).map(String));
-  if(selectedKeys.length){const keyed=new Map();for(const person of people){if(person.position_key&&!keyed.has(person.position_key))keyed.set(person.position_key,person)}return selectedKeys.flatMap(key=>keyed.has(key)?[keyed.get(key)]:[])}
-  return people.filter(person=>!teamIds.size||teamIds.has(String(person.team_id||"")));
+  const assignments=person=>Array.isArray(person.positions)&&person.positions.length?person.positions:[{key:person.position_key,name:person.position,team_id:person.team_id,team_name:person.team_name}];
+  const matchesTeam=person=>!teamIds.size||assignments(person).some(item=>teamIds.has(String(item.team_id||"")));
+  if(selectedKeys.length){
+    const results=[],seen=new Set();
+    for(const key of selectedKeys)for(const person of people){
+      const matched=assignments(person).filter(item=>String(item.key||"")===String(key)&&(!teamIds.size||teamIds.has(String(item.team_id||""))));
+      if(!matched.length)continue;
+      const identity=String(person.person_id||person.id||person.name||"");if(seen.has(identity))continue;seen.add(identity);
+      const selectedAssignments=assignments(person).filter(item=>selectedKeys.includes(item.key)&&(!teamIds.size||teamIds.has(String(item.team_id||""))));
+      results.push({...person,position:[...new Set(selectedAssignments.map(item=>item.name).filter(Boolean))].join(", ")||person.position,team_name:[...new Set(selectedAssignments.map(item=>item.team_name).filter(Boolean))].join(", ")||person.team_name});
+    }
+    return results;
+  }
+  return people.filter(matchesTeam);
 };
 const normalized = value => String(value||"").trim().toLocaleLowerCase();
 const presentationDisplayTitle = pp => {
@@ -124,8 +136,9 @@ const fitWidgetText = root => root.querySelectorAll("[data-fit-widget-text]").fo
   element.style.fontSize="";
   const parent=element.parentElement,max=Math.max(8,parseFloat(getComputedStyle(element).fontSize)||16);
   if(!parent.clientWidth||!parent.clientHeight)return;
+  const widthSafety=element.classList.contains("clock-value")?Math.max(14,parent.clientWidth*.14):0;
   let low=7,high=Math.floor(max),best=7;
-  while(low<=high){const size=Math.floor((low+high)/2);element.style.fontSize=`${size}px`;const fitsWidth=element.scrollWidth<=parent.clientWidth+1,fitsHeight=parent.scrollHeight<=parent.clientHeight+1;if(fitsWidth&&fitsHeight){best=size;low=size+1}else high=size-1}
+  while(low<=high){const size=Math.floor((low+high)/2);element.style.fontSize=`${size}px`;const fitsWidth=element.scrollWidth<=parent.clientWidth-widthSafety,fitsHeight=parent.scrollHeight<=parent.clientHeight+1;if(fitsWidth&&fitsHeight){best=size;low=size+1}else high=size-1}
   element.style.fontSize=`${best}px`;
 });
 const fitPeopleText = root => root.querySelectorAll("[data-fit-person]").forEach(copy=>{

@@ -510,6 +510,12 @@ class RuntimeAssignmentTests(unittest.TestCase):
         self.assertEqual(assignment["position_key"], "band::vox 1")
         self.assertEqual(assignment["team_id"], "band")
 
+    def test_demo_state_populates_propresenter_playlist_previews(self):
+        propresenter = RuntimeService.demo_state()["propresenter"]
+        self.assertTrue(propresenter["playlist_presentations"])
+        self.assertTrue(propresenter["playlist_presentations"][0]["slides"])
+        self.assertEqual(propresenter["presentation_uuid"], propresenter["playlist_presentations"][0]["presentation_uuid"])
+
     def test_service_control_can_take_advance_and_release(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = RuntimeService(ConfigStore(Path(directory) / "state.json"))

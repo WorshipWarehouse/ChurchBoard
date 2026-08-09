@@ -1136,9 +1136,28 @@ class RuntimeService:
             {"id": "mic-3", "receiver": "ULX-D Rack B", "channel": 1, "name": "WL", "battery_percent": 20, "rf": 72, "audio": 15, "online": True, "errors": [], "assignment": {"position": "Worship Leader", **people[2]}},
             {"id": "mic-4", "receiver": "ULX-D Rack B", "channel": 2, "name": "PASTOR", "battery_percent": 0, "rf": 0, "audio": 0, "online": False, "errors": ["Transmitter offline"], "assignment": {"position": "Pastor", "position_key": "speaking::pastor", "team_id": "speaking", "team_name": "Speaking", "name": "Alex Morgan", "photo": ""}},
         ]
+        demo_slides = [
+            {"index": index, "text": text, "notes": "Band: build into the chorus" if index == 3 else "", "part": part, "color": color, "image_url": "", "active": index == 3}
+            for index, text, part, color in [
+                (1, "Welcome to ChurchBoard", "Welcome", "#45b7d1"),
+                (2, "Service begins soon", "Welcome", "#45b7d1"),
+                (3, "Current worship slide", "Chorus", "#9c6cff"),
+                (4, "Next worship slide", "Verse 2", "#45b7d1"),
+                (5, "Follow the service flow", "Verse 2", "#45b7d1"),
+                (6, "Keep the team together", "Verse 2", "#45b7d1"),
+                (7, "Production notes", "Bridge", "#f2a23a"),
+                (8, "Ready for what is next", "Tag", "#5cda8b"),
+            ]
+        ]
         return {
             "organization_name": "My Church", "timezone": "America/New_York", "updated_at": now.isoformat(), "service": service, "plans": [service], "people": people,
             "timing": calculate_timing(service, now), "mics": mics,
             "planning_center": {"connected": True, "demo": True, "error": ""},
-            "propresenter": {"connected": True, "demo": True, "title": "Amazing Grace", "current": {"text": "Amazing grace, how sweet the sound", "notes": "Band: build into the chorus", "image_uuid": "", "image_url": "", "part": "Chorus", "color": "#9c6cff", "index": 3, "total": 8}, "next": {"text": "That saved a wretch like me", "notes": "", "image_uuid": "", "image_url": "", "part": "Verse 2", "color": "#45b7d1", "index": 4, "total": 8}, "slides": [{"index": index, "text": text, "notes": "Band: build into the chorus" if index == 3 else "", "part": part, "color": color, "image_url": "", "active": index == 3} for index, text, part, color in [(1, "Amazing grace, how sweet the sound", "Verse 1", "#45b7d1"), (2, "That saved a wretch like me", "Verse 1", "#45b7d1"), (3, "Amazing grace, how sweet the sound", "Chorus", "#9c6cff"), (4, "That saved a wretch like me", "Verse 2", "#45b7d1"), (5, "I once was lost, but now am found", "Verse 2", "#45b7d1"), (6, "Was blind, but now I see", "Verse 2", "#45b7d1"), (7, "My chains are gone", "Bridge", "#f2a23a"), (8, "Amazing grace", "Tag", "#5cda8b")] ]},
+            "propresenter": {
+                "connected": True, "demo": True, "title": "Amazing Grace", "playlist_name": "Sunday Worship", "presentation_uuid": "demo-amazing-grace",
+                "current": {"text": "Current worship slide", "notes": "Band: build into the chorus", "image_uuid": "", "image_url": "", "part": "Chorus", "color": "#9c6cff", "index": 3, "total": 8},
+                "next": {"text": "Next worship slide", "notes": "", "image_uuid": "", "image_url": "", "part": "Verse 2", "color": "#45b7d1", "index": 4, "total": 8},
+                "slides": demo_slides,
+                "playlist_presentations": [{"index": 0, "title": "Amazing Grace", "presentation_uuid": "demo-amazing-grace", "active": True, "triggerable": True, "is_pco": True, "slides": demo_slides}],
+            },
         }

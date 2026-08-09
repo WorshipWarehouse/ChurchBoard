@@ -127,7 +127,8 @@
 }
 
 .clock-value {
-  font-size: clamp(2rem, min(22cqw, 66cqh), 12rem) !important;
+  max-width: 92% !important;
+  font-size: clamp(2rem, min(17cqw, 60cqh), 10rem) !important;
 }
 
 .service-name {

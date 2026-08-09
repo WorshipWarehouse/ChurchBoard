@@ -112,6 +112,12 @@ Open `/producer` to manage the selected service, position checklists, embedded P
 
 ![ChurchBoard Producer workspace](docs/screenshots/producer-workspace.jpg)
 
+The Producer workflow is responsive for phones and tablets, keeping service selection, status, scheduled positions, checklists, and resources touch-friendly on the production network.
+
+| Phone workflow | Tablet workflow |
+| --- | --- |
+| ![ChurchBoard Producer position workflow on a phone](docs/screenshots/producer-mobile-phone.jpg) | ![ChurchBoard Producer position workflow on a tablet](docs/screenshots/producer-mobile-tablet.jpg) |
+
 ## Credits, licenses, and legal
 
 ChurchBoard's visual microphone-monitoring direction was inspired by [Micboard](https://micboard.io/) by Karl Swanson, an independent MIT-licensed project for network-enabled Shure devices. The initial cross-platform dashboard concept also drew inspiration from [NewsTalentMonitorPlus](https://github.com/wtapper89/NewsTalentMonitorPlus). ChurchBoard is a separate implementation and does not bundle either project's code or assets.
