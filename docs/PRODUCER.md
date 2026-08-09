@@ -1,8 +1,8 @@
-# Producer workspace beta
+# Producer workspace
 
-ChurchBoard 1.4 evolves the display system into a service-production workspace. This beta implements the first usable slices of GitHub issues #2, #5, #26, and #28 while retaining the existing local, no-login behavior until an owner account is created.
+ChurchBoard 1.4 evolves the display system into a service-production workspace while retaining the existing local, no-login behavior until an owner account is created.
 
-## Start the beta
+## Start Producer
 
 Open `/producer` on the ChurchBoard computer. On first use, ChurchBoard asks you to create the organization owner. Creating that account enables authentication for protected setup, editor, and producer pages.
 
@@ -58,6 +58,6 @@ ChurchBoard then listens at `https://<host>:8040`, or at the configured port. Po
 
 On the same trusted network, open `https://churchboard-hostname:8040/producer` from a phone or tablet. Producer navigation, scheduled-person cards, checklists, forms, and editor chrome collapse to touch-friendly layouts. Live dashboards automatically stack widgets into a single readable column on narrow screens; the editor remains usable with touch-friendly settings and scrollable layout controls.
 
-## Beta limits
+## Current scope
 
-This release uses local accounts. Invitation email, password-reset email, SSO, directory synchronization, aggregate reporting, and cloud storage remain future work. Back up the ChurchBoard data directory and export layouts before substantial testing.
+ChurchBoard 1.4 uses local accounts and local resource storage. Invitation email, password-reset email, SSO, directory synchronization, aggregate reporting, and cloud storage are not included. Back up the ChurchBoard data directory and export layouts regularly.

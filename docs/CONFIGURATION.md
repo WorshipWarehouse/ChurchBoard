@@ -111,6 +111,8 @@ When ProPresenter is synced from a Planning Center plan, ChurchBoard can use the
 
 ChurchBoard first uses ProPresenter's Planning Center playlist/item ordering when available. It then uses normalized title matching, including non-song items such as `Message`, even when the presentation itself has a title like a Scripture reference.
 
+The **ProPresenter playlist** widget can display either ProPresenter's rendered preview images or the text returned for every cue. Open that widget's settings and choose **Slide content**. Repeated chorus, bridge, tag, and other arrangement groups keep their expanded playlist position while ChurchBoard reuses the correct original ProPresenter thumbnail.
+
 ## 7. Configure order of service
 
 Select an **Order of service** widget in the editor to enable:
@@ -163,6 +165,8 @@ Restream monitoring shows whether a broadcast is live or upcoming, its elapsed t
 4. In ChurchBoard Setup, enable **Restream monitoring** and enter both credentials.
 5. Choose **Save & connect Restream**, authorize the account, and then test the connection.
 6. Add a **Restream livestream** widget to any dashboard that needs broadcast visibility.
+
+For the multi-provider **Livestream status** widget, configure each provider in that widget's settings. YouTube accepts a channel or current watch URL and can use a YouTube Data API key for reliable channel discovery and viewer counts. Facebook requires a Page access token for reliable Page live/offline state because anonymous Facebook Page HTML does not consistently expose the active broadcast. BoxCast, Resi, and Restream accept their corresponding status API endpoints and bearer credentials. Saved credentials remain server-side and are not returned with public dashboard configuration.
 
 ChurchBoard stores the client secret and OAuth tokens only in its local settings. Encoder bitrate and health are not exposed by the Restream public API, so ChurchBoard labels those values unavailable instead of estimating them. See [Restream setup](RESTREAM.md).
 

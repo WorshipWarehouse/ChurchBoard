@@ -1,6 +1,6 @@
 # ProPresenter setup
 
-ChurchBoard can read ProPresenter's current and next slides, slide images, notes, item title, part labels, colors, and slide number. Its ProPresenter Playlist widget also displays the focused playlist, including placeholders, every presentation, section markers, and all available slide thumbnails. On a trusted production network, ChurchBoard can trigger a playlist presentation or any slide within it. It can also match the active ProPresenter item to the same Planning Center plan and optionally use that match to advance Planning Center Services LIVE.
+ChurchBoard can read ProPresenter's current and next slides, slide images, notes, item title, part labels, colors, and slide number. Its ProPresenter Playlist widget also displays the focused playlist, including placeholders, every presentation, section markers, and a per-widget choice of rendered thumbnails or slide text. On a trusted production network, ChurchBoard can trigger a playlist presentation or any slide within it. It can also match the active ProPresenter item to the same Planning Center plan and optionally use that match to advance Planning Center Services LIVE.
 
 The most reliable workflow is to connect ProPresenter to Planning Center and open the service as a linked **Planning Center Service** playlist instead of building an unrelated local playlist.
 
@@ -76,7 +76,7 @@ In ChurchBoard's dashboard editor, select a **ProPresenter** widget and choose:
 
 Part labels use their ProPresenter colors. If parts do not change with the slide, confirm the cues/groups in the presentation are named and colored in ProPresenter.
 
-For the **ProPresenter playlist** widget, select the focused playlist in ProPresenter. ChurchBoard renders its placeholders and presentations in playlist order and shows every slide in each presentation continuously with its section marker. Choose compact, comfortable, or large density in the widget settings. **Follow and auto-scroll** keeps the active slide in view. ChurchBoard updates the active marker in place and caches stable playlist details and thumbnails, avoiding full list rebuilds and image flashes on every poll.
+For the **ProPresenter playlist** widget, select the focused playlist in ProPresenter. ChurchBoard renders its placeholders and presentations in playlist order and shows every slide in each presentation continuously with its section marker. In widget settings, choose **Rendered preview images** or **Slide text**, then choose compact, comfortable, or large density. **Follow and auto-scroll** keeps the active slide in view. ChurchBoard maps repeated arrangement sections back to their original ProPresenter thumbnail cues, updates the active marker in place, and caches stable playlist details and thumbnails to avoid missing repeated previews, full list rebuilds, and image flashes on every poll.
 
 On the live board itself, turn on **Slide controls** to make presentation headings and slide thumbnails clickable. Keep it off on public or read-only displays. ChurchBoard uses the live active presentation's current arrangement, rather than a stale library copy, when building the active slide sequence.
 
