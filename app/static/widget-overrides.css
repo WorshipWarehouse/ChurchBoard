@@ -118,6 +118,14 @@
   line-height: 1.08 !important;
 }
 
+.pp-list-slide.text-mode > .pp-slide-text {
+  white-space: pre-line !important;
+  overflow-wrap: anywhere !important;
+  background: linear-gradient(155deg, #111823, #05080d) !important;
+  font-size: clamp(.58rem, 2.5cqw, 1rem) !important;
+  font-weight: 750 !important;
+}
+
 .clock-value {
   font-size: clamp(2rem, min(22cqw, 66cqh), 12rem) !important;
 }
