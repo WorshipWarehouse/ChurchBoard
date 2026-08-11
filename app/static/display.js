@@ -2,6 +2,7 @@ let dashboard,lastState={},serverInstance="",refreshInFlight=false,planOptionsKe
 const widgetRenderKeys=new Map();
 const orderScrollPositions=new Map();
 const playlistScrollPositions=new Map();
+const playlistActiveKeys=new Map();
 const objectIds=new WeakMap();let nextObjectId=1;
 const slug=decodeURIComponent(location.pathname.split("/").pop());
 let dashboardFitFrame=0;
@@ -15,21 +16,17 @@ function fitDashboardToViewport(){
 function queueDashboardFit(){cancelAnimationFrame(dashboardFitFrame);dashboardFitFrame=requestAnimationFrame(fitDashboardToViewport)}
 function updateNativeSpl(){const osm=lastState.osm||{};document.querySelectorAll("[data-spl-meter]").forEach(meter=>{const value=Number(osm[meter.dataset.osmKey||"a_fast"]),green=Number(meter.dataset.green),orange=Number(meter.dataset.orange),reading=meter.querySelector("[data-spl-value]"),status=meter.querySelector("[data-spl-status]");if(!osm.connected||!Number.isFinite(value)){if(reading)reading.textContent="--";if(status)status.textContent="Waiting for Open Sound Meter";meter.classList.remove("spl-green","spl-orange","spl-red");return}if(reading)reading.textContent=value.toFixed(1);meter.classList.toggle("spl-green",value<=green);meter.classList.toggle("spl-orange",value>green&&value<=orange);meter.classList.toggle("spl-red",value>orange);if(status)status.textContent=`${osm.source_name||"OSM source"} · ${meter.dataset.osmLabel||"level"}`})}
 const triggerScope=element=>({dashboard_slug:slug,widget_id:element.closest(".widget")?.dataset.widget||null});
-let lightingButtonsCache=null,lightingButtonsLoadedAt=0;
-// Some TLC releases expose scene labels one step ahead of the command name.
-// Keep the visible label unchanged, but send the preceding numbered scene.
-const lightingCommandName=name=>String(name).replace(/(\d+)(?!.*\d)/,digits=>String(Number(digits)-1));
-async function hydrateLightingControls(){
-  const roots=[...document.querySelectorAll("[data-lighting-controls]")];if(!roots.length)return;
-  try{if(!lightingButtonsCache||Date.now()-lightingButtonsLoadedAt>5000){const result=await api("/api/integrations/lighting/buttons");lightingButtonsCache=result.items||[];lightingButtonsLoadedAt=Date.now()}const key=JSON.stringify(lightingButtonsCache),pages=new Map();lightingButtonsCache.forEach(button=>{const list=pages.get(button.page)||[];list.push(button);pages.set(button.page,list)});roots.forEach(root=>{if(root.dataset.lightingKey===key)return;const scrollTop=root.scrollTop;root.innerHTML=lightingButtonsCache.length?[...pages].map(([page,buttons])=>{const columns=Math.max(1,...buttons.map(button=>Number(button.page_columns)||1));return`<section class="lighting-page"><strong>${escapeHtml(page)}</strong><div class="control-buttons" style="--lighting-columns:${columns}">${buttons.map(button=>`<button type="button" class="${button.pressed?"active":""}" aria-pressed="${button.pressed?"true":"false"}" data-lighting-button="${escapeHtml(lightingCommandName(button.name))}" style="background:${safeCssColor(button.color)};color:${contrastText(button.color)}">${escapeHtml(button.name)}</button>`).join("")}</div></section>`}).join(""):`<div class="empty">No pages are exposed to external applications</div>`;root.insertAdjacentHTML("beforeend",'<div class="lighting-status" data-lighting-status></div>');root.dataset.lightingKey=key;root.scrollTop=scrollTop})}catch(error){roots.forEach(root=>root.innerHTML=`<div class="empty">${escapeHtml(error.message)}</div>`)}
-}
-const lightingRequests=new WeakMap();
-function triggerLightingScene(button){const previous=lightingRequests.get(button)||Promise.resolve(),next=previous.catch(()=>{}).then(async()=>{const status=button.closest("[data-lighting-controls]")?.querySelector("[data-lighting-status]");button.classList.add("pressed");if(status)status.textContent=`Triggering ${button.dataset.lightingButton}…`;try{await api("/api/integrations/lighting/button",{method:"POST",body:JSON.stringify({name:button.dataset.lightingButton,mode:"press",...triggerScope(button)})});if(status)status.textContent=`Triggered ${button.dataset.lightingButton}`;lightingButtonsCache=null}catch(error){if(status)status.textContent=error.message;throw error}finally{button.classList.remove("pressed")}});lightingRequests.set(button,next);next.catch(error=>console.error(error));return next}
-document.addEventListener("click",event=>{const button=event.target.closest("[data-lighting-button]");if(!button||button.disabled)return;triggerLightingScene(button)});
 document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppTrigger),playlistIndex=Number(button.dataset.ppPlaylistIndex);if(!Number.isInteger(index)||index<0||!Number.isInteger(playlistIndex)||playlistIndex<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-slide",{method:"POST",body:JSON.stringify({index,playlist_index:playlistIndex,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true",...triggerScope(button)})});await refresh(true)}catch(error){alert(error.message)}finally{button.disabled=false}});
 document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-playlist-trigger]");if(!button||button.disabled)return;const index=Number(button.dataset.ppPlaylistTrigger);if(!Number.isInteger(index)||index<0)return;button.disabled=true;try{await api("/api/integrations/propresenter/active-playlist-item",{method:"POST",body:JSON.stringify({index,presentation_uuid:button.dataset.ppPresentationUuid||null,is_pco:button.dataset.ppIsPco==="true",...triggerScope(button)})})}catch(error){alert(error.message)}finally{button.disabled=false}});
-function keyboardPlaylistWidget(){return(dashboard?.widgets||[]).find(widget=>widget.type==="playlist"&&widget.settings?.allow_remote_trigger!==false&&widget.settings?.keyboard_control===true)}
+document.addEventListener("click",async event=>{const button=event.target.closest("[data-pp-nav],[data-pp-item-nav]");if(!button||button.disabled)return;const direction=button.dataset.ppNav||button.dataset.ppItemNav,endpoint=button.dataset.ppItemNav?"navigate-item":"navigate",status=button.closest(".pp-control-pad")?.querySelector("[data-pp-control-status]");button.disabled=true;if(status)status.textContent=direction==="next"?"Advancing ProPresenter…":"Going back in ProPresenter…";try{await api(`/api/integrations/propresenter/${endpoint}/${direction}`,{method:"POST",body:JSON.stringify(triggerScope(button))});await refresh(true)}catch(error){if(status)status.textContent=error.message}finally{button.disabled=false}});
+const keyboardStorageKey=widgetId=>`churchboard:${slug}:propresenter-keyboard:${widgetId}`;
+function syncPlaylistOperatorToggles(root=document){root.querySelectorAll('[data-widget-type="playlist"]').forEach(element=>{const widgetId=element.dataset.widget,controls=element.querySelector("[data-pp-controls-toggle]"),keyboard=element.querySelector("[data-pp-keyboard-toggle]");if(!keyboard)return;const controlsEnabled=!!controls?.checked,stored=localStorage.getItem(keyboardStorageKey(widgetId)),enabled=stored===null?keyboard.dataset.defaultChecked==="true":stored==="true";keyboard.disabled=!controlsEnabled;keyboard.checked=controlsEnabled&&enabled})}
+function keyboardPlaylistWidget(){const toggle=document.querySelector('[data-widget-type="playlist"] [data-pp-keyboard-toggle]:checked:not(:disabled)'),widgetId=toggle?.closest(".widget")?.dataset.widget;return(dashboard?.widgets||[]).find(widget=>String(widget.id)===String(widgetId))}
 function setPlaylistKeyboardStatus(message,isError=false){document.querySelectorAll("[data-pp-keyboard-status]").forEach(element=>{element.textContent=message;element.classList.toggle("error",isError)})}
+document.addEventListener("change",async event=>{
+  const keyboard=event.target.closest("[data-pp-keyboard-toggle]");if(keyboard){const widgetId=keyboard.closest(".widget")?.dataset.widget;if(widgetId)localStorage.setItem(keyboardStorageKey(widgetId),String(keyboard.checked));setPlaylistKeyboardStatus(keyboard.checked?"←/↑ back · →/↓/Space next":"");return}
+  const controls=event.target.closest("[data-pp-controls-toggle]");if(!controls)return;const widgetId=controls.closest(".widget")?.dataset.widget,widget=(dashboard?.widgets||[]).find(item=>String(item.id)===String(widgetId));if(!widget)return;controls.disabled=true;widget.settings={...(widget.settings||{}),allow_remote_trigger:controls.checked};if(!controls.checked)localStorage.setItem(keyboardStorageKey(widgetId),"false");try{dashboard=await api(`/api/dashboards/${encodeURIComponent(dashboard.id)}`,{method:"PUT",body:JSON.stringify(dashboard)});widgetRenderKeys.delete(String(widgetId));render()}catch(error){widget.settings.allow_remote_trigger=!controls.checked;controls.checked=!controls.checked;controls.disabled=false;alert(error.message)}
+});
 document.addEventListener("keydown",async event=>{
   const playlistWidget=keyboardPlaylistWidget();if(!playlistWidget||ppKeyboardInFlight||event.defaultPrevented||event.repeat||event.metaKey||event.ctrlKey||event.altKey)return;
   const target=event.target;if(target instanceof Element&&(target.closest("input,textarea,select,button,a,[contenteditable=true]")||target.closest(".display-menu.open")))return;
@@ -100,32 +97,37 @@ function render(){
   for(const [id,element] of existing){if(!activeIds.has(id)){element.remove();widgetRenderKeys.delete(id);orderScrollPositions.delete(id);playlistScrollPositions.delete(id);changed=true}}
   if(!widgets.length&&root.innerHTML!==`<div class="empty">This dashboard has no widgets.</div>`){root.innerHTML=`<div class="empty">This dashboard has no widgets.</div>`;changed=true}
   updateTimingWidgets();updateOrderTimingWidgets();
-  if(changed){tickClocks();enhanceDynamicContent(root)}
+  if(changed){tickClocks();enhanceDynamicContent(root);syncPlaylistOperatorToggles(root)}
+  updatePlaylistLiveState(root);
   queueDashboardFit();
   updateNativeSpl();
-  hydrateLightingControls();
 }
 function objectId(value){if(!value||typeof value!=="object")return String(value);if(!objectIds.has(value))objectIds.set(value,nextObjectId++);return objectIds.get(value)}
 function leaderMicKey(mics){return(mics||[]).map(mic=>[mic.id,mic.name,mic.receiver,mic.assignment?.person_id,mic.assignment?.id,mic.assignment?.name,mic.assignment?.position_key])}
 function widgetStateKey(widget,state){
   const timing=state.timing||{},service=state.service||{},pp=state.propresenter||{},settings=widget.settings||{};
   if(widget.type==="clock"||widget.type==="spl"||widget.type==="text")return`${widget.type}:static`;
-  if(widget.type==="lighting")return`lighting:${JSON.stringify([settings.page_size,settings.scene_size])}`;
   if(widget.type==="service")return`service:${objectId(service)}:${timing.source||""}:${timing.state||""}`;
   if(widget.type==="timing")return`timing:${String(timing.current_item?.id||"")}:${timing.rehearsal===true}`;
   if(["assignments","mics"].includes(widget.type))return`${widget.type}:${JSON.stringify([state.people||[],state.mics||[],state.planning_center_media||{}])}`;
-  if(widget.type==="slides"||widget.type==="playlist"||widget.type==="producer")return`${widget.type}:${JSON.stringify([pp,service,timing])}`;
+  if(widget.type==="slides"||widget.type==="producer")return`${widget.type}:${JSON.stringify([pp,service,timing])}`;
+  if(widget.type==="playlist"){const rows=(pp.playlist_presentations||[]).map(item=>({index:item.index,title:item.title,presentation_uuid:item.presentation_uuid,is_pco:item.is_pco,triggerable:item.triggerable,type:item.type,slides:(item.slides||[]).map(slide=>({index:slide.index,part:slide.part,color:slide.color,image_url:slide.image_url}))}));return`playlist:${JSON.stringify([pp.playlist_name,pp.title,pp.planning_center_item_title,rows,settings])}`}
+  if(widget.type==="pp_controls")return`pp-controls:${String(pp.presentation_uuid||"")}:${String(pp.title||"")}`;
   if(widget.type==="notes")return`notes:${String(pp.current?.notes||"")}`;
+  if(widget.type==="sermon_notes")return`sermon-notes:${objectId(timing.service_items||service.items)}:${JSON.stringify(settings)}`;
   if(widget.type==="order")return`order:${objectId(timing.service_items||service.items)}:${objectId(state.people)}:${JSON.stringify(leaderMicKey(state.mics))}:${String(timing.current_item?.id||"")}:${timing.service_time_id||""}:${settings.show_leader!==false}:${settings.show_mic!==false}`;
   if(widget.type==="people"||widget.type==="person")return`${widget.type}:${objectId(state.people)}`;
   if(widget.type==="controls")return`controls:${JSON.stringify([state.planning_center_live||{},state.service_control||{},timing.current_item?.id,timing.current_item?.title])}`;
   if(widget.type==="restream")return`restream:${JSON.stringify(state.restream||{})}`;
+  if(widget.type==="livestreams")return`livestreams:${JSON.stringify([state.livestreams||[],settings.sources||[]])}`;
+  if(widget.type==="propresenter_timers")return`propresenter-timers:${JSON.stringify(pp.timers||[])}`;
   return`${widget.type}:${JSON.stringify(state)}`;
 }
+function updatePlaylistLiveState(root=document){const pp=lastState.propresenter||{},uuid=String(pp.presentation_uuid||""),slide=Number(pp.current?.index)||0;root.querySelectorAll('[data-widget-type="playlist"]').forEach(widget=>{const widgetId=String(widget.dataset.widget||""),key=`${uuid}:${slide}`;widget.querySelectorAll("[data-pp-item-uuid]").forEach(item=>{const active=String(item.dataset.ppItemUuid||"")===uuid;item.classList.toggle("active",active);const status=item.querySelector("[data-pp-item-status]");if(status)status.textContent=active?"On air":status.dataset.idleLabel||""});widget.querySelectorAll("[data-pp-slide-uuid]").forEach(item=>item.classList.toggle("active",String(item.dataset.ppSlideUuid||"")===uuid&&Number(item.dataset.ppSlideNumber)===slide));if(playlistActiveKeys.get(widgetId)===key)return;playlistActiveKeys.set(widgetId,key);const configured=(dashboard?.widgets||[]).find(item=>String(item.id)===widgetId);if(configured?.settings?.auto_scroll===false)return;const target=widget.querySelector(".pp-list-slide.active")||widget.querySelector(".pp-list-presentation.active");target?.scrollIntoView({block:"nearest",inline:"nearest",behavior:"smooth"})})}
 function fitOrderService(root=document){
   root.querySelectorAll(".order-list").forEach(list=>{
     if(list.classList.contains("full-service-order-list"))return;
-    if(list.classList.contains("full-service-order-fit-list")||list.classList.contains("current-service-order-list")){let low=.1,high=1,best=.1;for(let pass=0;pass<8;pass++){const scale=(low+high)/2;list.style.setProperty("--order-fit-scale",scale);if(list.scrollHeight<=list.clientHeight+1){best=scale;low=scale}else high=scale}list.style.setProperty("--order-fit-scale",best);return}
+    if(list.classList.contains("full-service-order-fit-list")||list.classList.contains("current-service-order-list")){let low=.1,high=2.5,best=.1;for(let pass=0;pass<9;pass++){const scale=(low+high)/2;list.style.setProperty("--order-fit-scale",scale);if(list.scrollHeight<=list.clientHeight+1&&list.scrollWidth<=list.clientWidth+1){best=scale;low=scale}else high=scale}list.style.setProperty("--order-fit-scale",best);return}
     const rows=[...list.querySelectorAll("li")];if(!rows.length)return;
     rows.forEach(row=>row.classList.remove("order-hidden"));
     const foundActive=rows.findIndex(row=>row.classList.contains("active")),activeIndex=foundActive>=0?foundActive:0,heights=rows.map(row=>Math.ceil(row.getBoundingClientRect().height)),available=Math.max(0,list.clientHeight-2),priority=[];
@@ -182,4 +184,4 @@ document.querySelector("#active-plan").addEventListener("change",async event=>{
   finally{planSelectionInFlight=false;select.disabled=false;updatePlans()}
 });
 api("/api/dashboards").then(data=>document.querySelector("#board-links").innerHTML=data.items.map(item=>`<div class="board-menu-row"><a class="board-menu-open" href="/display/${encodeURIComponent(item.slug)}">${escapeHtml(item.name)}</a><a class="board-menu-edit" href="/editor/${encodeURIComponent(item.slug)}" aria-label="Edit ${escapeHtml(item.name)}">Edit</a></div>`).join(""));
-checkServerInstance();loadBoard(); setInterval(refresh,75); setInterval(tickClocks,250);setInterval(checkServerInstance,5000);
+checkServerInstance();loadBoard(); setInterval(refresh,150); setInterval(tickClocks,250);setInterval(checkServerInstance,5000);

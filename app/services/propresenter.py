@@ -68,7 +68,7 @@ class ProPresenterClient:
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
         clock = time.monotonic()
         fetch_active = not self._active_payload or clock - self._active_refreshed >= 0.25
-        fetch_playlist = not self._playlist_payload or clock - self._playlist_refreshed >= 0.5
+        fetch_playlist = not self._playlist_payload or clock - self._playlist_refreshed >= 1.5
         names = ["slide", "index"]
         requests = [
             self._http().get(f"{base}/v1/status/slide"),
@@ -111,13 +111,15 @@ class ProPresenterClient:
             playlist_rows = self._playlist_presentations(
                 self._playlist_items_payload, self._playlist_context(self._playlist_payload)
             )
-            presentation_uuids = tuple(
-                row["presentation_uuid"] for row in playlist_rows
-                if row.get("triggerable") and re.fullmatch(r"[A-Za-z0-9-]+", row.get("presentation_uuid") or "")
-            )
+            presentation_uuids = tuple(dict.fromkeys(
+                str(row["presentation_uuid"]) for row in playlist_rows
+                if row.get("triggerable") and row.get("presentation_uuid") and "/" not in str(row.get("presentation_uuid"))
+            ))
+            missing_details = any(uuid not in self._playlist_presentation_details for uuid in presentation_uuids)
             if presentation_uuids and (
                 presentation_uuids != self._playlist_details_key
-                or clock - self._playlist_details_refreshed >= 5.0
+                or (missing_details and clock - self._playlist_details_refreshed >= 5.0)
+                or clock - self._playlist_details_refreshed >= 10.0
             ):
                 detail_responses = await asyncio.gather(*[
                     self._http().get(f"{base}/v1/presentation/{quote(uuid, safe='')}")
@@ -142,7 +144,7 @@ class ProPresenterClient:
         # playlist widget has every cue, group and label—not just Now/Next.
         if presentation_uuid and (
             presentation_uuid != self._presentation_details_uuid
-            or clock - self._presentation_details_refreshed >= 0.5
+            or clock - self._presentation_details_refreshed >= 2.0
         ):
             detail_response = await self._http().get(
                 f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}"
@@ -169,6 +171,8 @@ class ProPresenterClient:
         current_position, next_position = self._cue_positions(cue_entries, current, next_slide, index)
         current_entry = cue_entries[current_position] if 0 <= current_position < len(cue_entries) else {}
         next_entry = cue_entries[next_position] if 0 <= next_position < len(cue_entries) else {}
+        current_thumbnail_position = int(current_entry.get("_thumbnail_index", current_position))
+        next_thumbnail_position = int(next_entry.get("_thumbnail_index", next_position))
         current_details = current_entry.get("cue", {})
         next_details = next_entry.get("cue", {})
         current_result = self._slide(current)
@@ -243,7 +247,7 @@ class ProPresenterClient:
             "color": current_entry.get("color", ""),
             "index": index + 1,
             "total": cue_total,
-            "image_url": self._thumbnail_url(presentation_uuid, current_position, current_result["image_uuid"])
+            "image_url": self._thumbnail_url(presentation_uuid, current_thumbnail_position, current_result["image_uuid"])
             if current_result["image_uuid"] or current_details else "",
             "timer_text": current_timer,
             "media": visible_media,
@@ -253,14 +257,22 @@ class ProPresenterClient:
             "color": next_entry.get("color", ""),
             "index": index + 2 if index + 1 < cue_total else 0,
             "total": cue_total,
-            "image_url": self._thumbnail_url(presentation_uuid, next_position, next_result["image_uuid"])
+            "image_url": self._thumbnail_url(presentation_uuid, next_thumbnail_position, next_result["image_uuid"])
             if next_result["image_uuid"] or next_details else "",
             "timer_text": self._countdown_text(next_result.get("text")),
         })
         for item in playlist_presentations:
             item_uuid = item.get("presentation_uuid") or ""
-            item_details = self._playlist_presentation_details.get(item_uuid) or {}
+            active_row = bool(item.get("active")) or item_uuid == presentation_uuid or (
+                playlist_context.get("service_item_index") is not None
+                and int(item.get("index", -1)) == int(playlist_context.get("service_item_index"))
+            )
+            item_details = presentation if active_row else self._playlist_presentation_details.get(item_uuid) or item.get("_presentation_payload") or {}
+            thumbnail_uuid = presentation_uuid if active_row and presentation_uuid else item_uuid
+            if active_row and presentation_uuid:
+                item["presentation_uuid"] = presentation_uuid
             entries = self._presentation_cue_entries(item_details)
+            item["slides_loaded"] = bool(item_details)
             item["slides"] = [
                 {
                     "index": position + 1,
@@ -268,8 +280,12 @@ class ProPresenterClient:
                     "notes": self._notes(entry.get("cue")),
                     "part": entry.get("part", ""),
                     "color": entry.get("color", ""),
-                    "image_url": self._thumbnail_url(item_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")),
-                    "active": item_uuid == presentation_uuid and position == current_position,
+                    "image_url": self._thumbnail_url(
+                        thumbnail_uuid,
+                        int(entry.get("_thumbnail_index", position)),
+                        self._slide(entry.get("cue")).get("image_uuid", ""),
+                    ),
+                    "active": active_row and position == current_position,
                 }
                 for position, entry in enumerate(entries)
             ]
@@ -282,7 +298,7 @@ class ProPresenterClient:
             "next": next_result,
             "timers": self._transport_payload.get("timers") or [],
             "slides": [
-                {"index": position + 1, "text": self._slide(entry.get("cue")).get("text", ""), "notes": self._notes(entry.get("cue")), "part": entry.get("part", ""), "color": entry.get("color", ""), "image_url": self._thumbnail_url(presentation_uuid, position, self._slide(entry.get("cue")).get("image_uuid", "")), "active": position == current_position}
+                {"index": position + 1, "text": self._slide(entry.get("cue")).get("text", ""), "notes": self._notes(entry.get("cue")), "part": entry.get("part", ""), "color": entry.get("color", ""), "image_url": self._thumbnail_url(presentation_uuid, int(entry.get("_thumbnail_index", position)), self._slide(entry.get("cue")).get("image_uuid", "")), "active": position == current_position}
                 for position, entry in enumerate(cue_entries)
             ],
             "playlist_presentations": playlist_presentations,
@@ -363,7 +379,7 @@ class ProPresenterClient:
             title = cls._presentation_title(presentation) or cls._presentation_title(row) or str(row.get("name") or "Presentation")
             presentation_info = row.get("presentation_info") if isinstance(row.get("presentation_info"), dict) else {}
             kind = str(row.get("type") or "presentation").casefold()
-            triggerable = kind == "presentation"
+            triggerable = kind not in {"playlist", "folder", "playlist_folder", "header", "placeholder"}
             identifier = (str(presentation_info.get("presentation_uuid") or "") or cls._presentation_uuid(presentation) or str(row.get("presentation_uuid") or row.get("presentation_id") or "")) if triggerable else ""
             raw_index = row.get("index")
             if raw_index is None and isinstance(row.get("id"), dict):
@@ -372,7 +388,7 @@ class ProPresenterClient:
                 index = int(raw_index) if raw_index is not None else position
             except (TypeError, ValueError):
                 index = position
-            results.append({"index": index, "title": title, "presentation_uuid": identifier, "active": index == context.get("service_item_index"), "is_pco": bool(row.get("is_pco")), "type": kind, "triggerable": triggerable})
+            results.append({"index": index, "title": title, "presentation_uuid": identifier, "active": index == context.get("service_item_index"), "is_pco": bool(row.get("is_pco")), "type": kind, "triggerable": triggerable, "_presentation_payload": presentation})
         return results
 
     async def trigger_active_slide(self, index: int) -> None:
@@ -393,7 +409,7 @@ class ProPresenterClient:
 
     async def trigger_presentation_slide(self, presentation_uuid: str, index: int) -> None:
         """Trigger a cue by UUID, falling back for PCO-linked presentations."""
-        if not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid or ""):
+        if presentation_uuid and not re.fullmatch(r"[A-Za-z0-9-]+", presentation_uuid):
             raise ValueError("Invalid ProPresenter presentation UUID")
         if index < 0 or index > 10000:
             raise ValueError("Invalid ProPresenter slide index")
@@ -418,12 +434,10 @@ class ProPresenterClient:
         if cue_index < 0 or cue_index > 10000:
             raise ValueError("Invalid ProPresenter slide index")
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
-        response = await self._http().get(
-            f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/{cue_index}/trigger"
-        )
-        if response.is_success:
+        response = await self._http().get(f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/{cue_index}/trigger") if presentation_uuid else None
+        if response is not None and response.is_success:
             return
-        if response.status_code not in {400, 404}:
+        if response is not None and response.status_code not in {400, 404}:
             response.raise_for_status()
         # PCO-linked items can reject their presentation UUID. Activate the
         # playlist row first, then cue its now-active presentation.
@@ -639,22 +653,30 @@ class ProPresenterClient:
         if not isinstance(sequence, list) or not sequence:
             return cls._cue_entries(raw)
 
-        group_map = {identifier(group): group for group in groups if isinstance(group, dict) and identifier(group)}
+        group_entries: dict[str, list[dict[str, Any]]] = {}
+        thumbnail_offset = 0
+        for group in groups:
+            group_id = identifier(group)
+            if not isinstance(group, dict) or not group_id:
+                continue
+            source_entries = cls._cue_entries(group)
+            group_entries[group_id] = [
+                {**entry, "_thumbnail_index": thumbnail_offset + position}
+                for position, entry in enumerate(source_entries)
+            ]
+            thumbnail_offset += len(source_entries)
         sequence_ids = [identifier(value) for value in sequence]
-        sequence_ids = [value for value in sequence_ids if value in group_map]
+        sequence_ids = [value for value in sequence_ids if value in group_entries]
         if not sequence_ids:
             return cls._cue_entries(raw)
 
-        referenced = set(sequence_ids)
-        first_arranged = next((index for index, group in enumerate(groups) if identifier(group) in referenced), 0)
         entries: list[dict[str, Any]] = []
-        # Thumbnail indexes include leading media/background cues even though
-        # presentation_index and the active arrangement do not.
-        for group in groups[:first_arranged]:
-            if isinstance(group, dict):
-                entries.extend(cls._cue_entries(group))
+        # ProPresenter expands repeated arrangement groups in its live cue
+        # order, but its thumbnail endpoint continues to address the original
+        # library cue. Preserve the expanded order while retaining each cue's
+        # source thumbnail index so repeated groups do not become 404s.
         for group_id in sequence_ids:
-            entries.extend(cls._cue_entries(group_map[group_id]))
+            entries.extend(dict(entry) for entry in group_entries[group_id])
         return entries
 
     @classmethod
@@ -800,8 +822,10 @@ class ProPresenterClient:
             raise ValueError("Invalid ProPresenter presentation or slide index")
         base = f"http://{self.settings.get('host', '127.0.0.1')}:{int(self.settings.get('port', 50001))}"
         async with httpx.AsyncClient(timeout=5) as client:
+            # Presentation state and trigger routes use zero-based cue indexes,
+            # while ProPresenter's thumbnail route uses one-based cue numbers.
             response = await client.get(
-                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/thumbnail/{index}",
+                f"{base}/v1/presentation/{quote(presentation_uuid, safe='')}/thumbnail/{index + 1}",
                 params={"quality": 960, "thumbnail_type": "jpeg"},
                 headers={"Accept": "image/jpeg"},
             )
