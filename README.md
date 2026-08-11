@@ -2,11 +2,13 @@
   <img src="app/static/churchboard-logo.png" alt="ChurchBoard wooden church announcement board logo" width="190">
 </p>
 
-![Complete ChurchBoard main dashboard with color-matched glass widgets](docs/screenshots/main-dashboard-complete.jpg)
+![Complete ChurchBoard main dashboard with color-matched glass widgets](docs/screenshots/main-dashboard.jpg)
 
 <h1 align="center">ChurchBoard</h1>
 
 ChurchBoard is a cross-platform production dashboard for churches. It combines Planning Center schedules and people, ProPresenter slides and service flow, Shure QLX-D/ULX-D/SLX-D and Sennheiser EW-DX microphone telemetry, Open Sound Meter levels, OBS Studio health, and Restream broadcast status in configurable displays for the stage, green room, audio booth, and production team.
+
+ChurchBoard 1.4 adds a mobile-friendly Producer workspace with organization accounts and roles, campuses, Planning Center position checklists and tagged-media resources, completion tracking, portable dashboard layouts, configurable HTTP/HTTPS, and a redesigned widget editor. See the [Producer workspace guide](docs/PRODUCER.md).
 
 ## Watch the setup and demo video
 
@@ -20,7 +22,7 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 - Photo-forward scheduled-position and microphone cards, including unassigned positions and a per-widget choice between one card per person or one card per position
 - Shure QLX-D/ULX-D/SLX-D and Sennheiser EW-DX battery, RF/audio, transmitter, mute, warning, and online/offline status
 - Current and next ProPresenter slides as text or slide images, with live countdown overlays and video playback progress
-- A scrollable ProPresenter playlist that shows every playlist item, placeholder, presentation, section marker, and slide thumbnail; trusted operators can trigger a presentation or individual slide from ChurchBoard
+- A scrollable ProPresenter playlist that shows every playlist item, presentation, and section marker with a per-widget choice of rendered preview images or slide text; repeated arrangement sections retain correct thumbnails, and trusted operators can trigger a presentation or individual slide from ChurchBoard
 - Optional live-board slide controls and keyboard control for ProPresenter, with corrected current-slide thumbnails and Planning Center-linked item matching
 - A read-only ProPresenter timers widget showing each timer's current value and state
 - ProPresenter item title, part labels and colors, slide number, and notes
@@ -32,7 +34,12 @@ See ChurchBoard in action and follow the setup walkthrough in the **[ChurchBoard
 - OBS Studio streaming/recording state, connection health, output statistics, dropped-frame warnings, and an optional preview image
 - Native lighting control for Chauvet ShowXpress, Showtec QuickDMX, Sweetlight Controller, and other TheLightingController-based apps, with their exposed Live buttons shown on a dashboard
 - Planning Center Services LIVE control buttons
-- A WYSIWYG dashboard editor with independent layouts and color-matched liquid-glass widgets for each destination
+- A WYSIWYG dashboard editor with an always-visible **Edit** button, right-click settings, independent layouts, and color-matched liquid-glass widgets for each destination
+- Exportable/importable dashboard layout files and a categorized widget palette with modal settings and direct edge/corner resizing
+- A multi-provider livestream status widget with green/gray state lights, per-stream elapsed time, available live-viewer counts, Facebook/YouTube channel URLs, and independent BoxCast, Resi, and Restream API configuration
+- A scrollable, resizable sermon-notes widget that selects a named note field from a Planning Center service item
+- A dedicated ProPresenter control pad for previous/next slide and previous/next playlist item
+- A mobile-friendly Producer workspace for position checklists, Planning Center tagged media, embedded resources, files, links, team access, campuses, and an activity trail
 
 ![ChurchBoard audio-board dashboard](docs/screenshots/audio-board.jpg)
 
@@ -43,22 +50,26 @@ Choose your computer and click its download link:
 
 | Your computer | Download |
 | --- | --- |
-| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-Windows-x64-Setup.exe)** |
-| **Mac with Apple silicon** — M1 or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-macOS-arm64.dmg)** |
-| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-macOS-x86_64.dmg)** |
-| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-Linux-amd64.deb)** |
-| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.3.3-Linux-x86_64.tar.gz)** |
+| **Windows 10 or 11** | **[Download the Windows installer (.exe)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.4.0-Windows-x64-Setup.exe)** |
+| **Mac with Apple silicon** — M1 or newer | **[Download the Apple silicon Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.4.0-macOS-arm64.dmg)** |
+| **Mac with an Intel processor** | **[Download the Intel Mac disk image (.dmg)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.4.0-macOS-x86_64.dmg)** |
+| **Ubuntu or Debian Linux** | **[Download the Linux installer (.deb)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.4.0-Linux-amd64.deb)** |
+| **Other 64-bit desktop Linux** | **[Download the portable Linux package (.tar.gz)](https://github.com/wtapper89/ChurchBoard/releases/latest/download/ChurchBoard-1.4.0-Linux-x86_64.tar.gz)** |
 
 Not sure which Mac you have? Choose **Apple menu → About This Mac**. If it says **Chip**, use Apple silicon. If it says **Processor**, use Intel.
 
 **Raspberry Pi:** jump to the [one-command Raspberry Pi installer](#raspberry-pi).
 
-[View all v1.3.3 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v1.3.3)
+[View all v1.4.0 downloads and release notes](https://github.com/wtapper89/ChurchBoard/releases/tag/v1.4.0)
 
-### What's new in 1.3.3
+### What's new in 1.4.0
 
-- Deleting the optional ProPresenter Playlist widget now keeps it deleted on every dashboard.
-- The live Playlist widget's **Slide controls** and **Arrow keys** settings use larger, clearer toggle switches.
+- Producer accounts with Admin, Editor, and Volunteer roles; optional passwords; editable campuses and users; local administrator recovery; and easier Planning Center person matching.
+- Position-based, versioned checklists and resources, including Planning Center tagged media that opens inside ChurchBoard.
+- Portable dashboard export/import, a categorized widget palette, modal settings, always-visible editor buttons, and direct drag resizing.
+- Configurable listening port and direct HTTPS certificate support with mobile-friendly dashboards, editing, and Producer workflows.
+- New livestream, OBS, ProPresenter control, timers, and sermon-notes widgets with responsive sizing.
+- The ProPresenter Playlist can show rendered previews or slide text, follows repeated arrangements correctly, and keeps controls and auto-scroll configurable per board.
 
 ## Install
 
@@ -92,9 +103,21 @@ Start with [Configuration](docs/CONFIGURATION.md), then follow the detailed [Pla
 
 ## Dashboard editing
 
-Each dashboard has a stable URL. Add widgets from the palette, drag and resize them directly on the canvas, then configure the selected widget in the inspector. Every widget title can be hidden. Scheduled-position widgets can consolidate multiple roles into one card per person or retain one card per position. The ProPresenter playlist widget shows the focused playlist as a continuous scrollable list, including placeholders and all presentation slides; its inspector controls slide, playlist-item, and section-marker sizes plus the active-slide border color. An optional per-board keyboard mode sends Left/Up to the previous ProPresenter cue and Right/Down/Space to the next cue, including transitions between playlist items. Order-of-service widgets can show a compact current window, a scrollable complete plan, or the complete plan fitted to the widget. Text, cards, photos, and status displays scale with their widget and remain visible when a display changes size or enters fullscreen. Setup can cancel a new dashboard before it is named, and the editor includes a confirmation-protected **Delete display** action. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
+Each dashboard has a stable URL. Add widgets from the palette, drag them on the canvas, and resize from the blue right edge, bottom edge, or corner. The upper-right **Edit** button or a right-click opens modal settings, leaving the full editor width for the board. Every widget title can be hidden. Scheduled-position widgets can consolidate multiple roles into one card per person or retain one card per position. The ProPresenter playlist widget shows the focused playlist as a continuous, automatically scrolling list; choose rendered preview images or slide text, compact/comfortable/large density, an active-slide border color, and whether slide controls and keyboard control start enabled on that board. A separate control widget provides previous/next slide and item buttons. Order-of-service widgets can show a compact current window, a scrollable complete plan, or the complete plan fitted to the widget. Text, cards, photos, timers, and status displays scale with their widget and stack into readable cards on narrow mobile screens. Setup can cancel a new dashboard before it is named, and the editor includes a confirmation-protected **Delete display** action. The display hamburger includes an **Edit** action beside every board, and **Open display** in the editor reuses the current tab.
 
 ![ChurchBoard WYSIWYG dashboard editor](docs/screenshots/dashboard-editor.jpg)
+
+## Producer workspace
+
+Open `/producer` to manage the selected service, position checklists, embedded Planning Center resources, users, campuses, and activity. Existing installations remain usable without sign-in until the first owner account is created. See the [Producer workspace guide](docs/PRODUCER.md) for roles, optional passwords, Planning Center matching, mobile use, and backup guidance.
+
+![ChurchBoard Producer workspace](docs/screenshots/producer-workspace.jpg)
+
+The Producer workflow is responsive for phones and tablets, keeping service selection, status, scheduled positions, checklists, and resources touch-friendly on the production network.
+
+| Phone workflow | Tablet workflow |
+| --- | --- |
+| ![ChurchBoard Producer position workflow on a phone](docs/screenshots/producer-mobile-phone.jpg) | ![ChurchBoard Producer position workflow on a tablet](docs/screenshots/producer-mobile-tablet.jpg) |
 
 ## Credits, licenses, and legal
 
@@ -129,4 +152,4 @@ See [Development and release builds](docs/DEVELOPMENT.md) for platform build com
 
 ## Security
 
-Planning Center credentials remain in the local ChurchBoard data directory and are excluded from Git. ChurchBoard is intended for a trusted production LAN and does not yet provide its own login screen or TLS termination. Read [SECURITY.md](SECURITY.md) before exposing it beyond that network.
+Planning Center credentials remain in the local ChurchBoard data directory and are excluded from Git. ChurchBoard provides local accounts, role-based access, secure session cookies, optional direct HTTPS certificate support, and a password-optional mode intended only for physically controlled production networks. Keep ChurchBoard on a trusted production network and read [SECURITY.md](SECURITY.md) before allowing remote access.
